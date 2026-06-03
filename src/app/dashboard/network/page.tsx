@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react"
 import { supabase } from "@/lib/supabase/client"
+import { useRouter } from "next/navigation"
 import dynamic from 'next/dynamic'
 import { Sparkles, Users } from "lucide-react"
 
@@ -15,6 +16,7 @@ export default function NetworkGraphPage() {
   const [graphData, setGraphData] = useState<{ nodes: any[], links: any[] }>({ nodes: [], links: [] })
   const [loading, setLoading] = useState(true)
   const fgRef = useRef<any>()
+  const router = useRouter()
 
   useEffect(() => {
     fetchGraphData()
@@ -118,6 +120,11 @@ export default function NetworkGraphPage() {
             height={600}
             d3AlphaDecay={0.05}
             d3VelocityDecay={0.4}
+            onNodeClick={(node: any) => {
+              if (node.id !== graphData.nodes[0]?.id) {
+                router.push(`/dashboard/person/${node.id}`)
+              }
+            }}
             nodeCanvasObject={(node: any, ctx, globalScale) => {
               const label = node.name;
               const fontSize = 12/globalScale;
