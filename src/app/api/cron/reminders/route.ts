@@ -68,7 +68,48 @@ export async function GET(request: Request) {
       }
     }
 
-    // 4. Insert notifications into DB and trigger Web Push
+    // 4. Fetch pending custom reminders
+    const { data: customReminders, error: remError } = await supabase
+      .from('reminders')
+      .select('*, people(name)')
+      .eq('is_completed', false);
+
+    if (remError) throw remError;
+
+    // 5. Evaluate custom reminders day-by-day
+    for (const reminder of customReminders || []) {
+      if (!reminder.scheduled_for) continue;
+
+      const scheduledDate = new Date(reminder.scheduled_for);
+      
+      // Calculate diff in days (ignoring time)
+      const diffTime = scheduledDate.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      let alertMessage = null;
+      let alertTitle = "Upcoming Reminder";
+
+      if (diffDays === 7) {
+        alertMessage = `You have a reminder in exactly 7 days: ${reminder.title}`;
+      } else if (diffDays === 3) {
+        alertMessage = `You have a reminder in 3 days: ${reminder.title}`;
+      } else if (diffDays === 1) {
+        alertMessage = `Reminder tomorrow: ${reminder.title}`;
+      } else if (diffDays === 0) {
+        alertTitle = "Reminder Due Today!";
+        alertMessage = reminder.title;
+      }
+
+      if (alertMessage) {
+        notificationsToInsert.push({
+          user_id: reminder.user_id,
+          title: alertTitle,
+          message: alertMessage,
+        });
+      }
+    }
+
+    // 6. Insert notifications into DB and trigger Web Push
     if (notificationsToInsert.length > 0) {
       const { data: insertedNotifs, error: insertError } = await supabase
         .from('notifications')
@@ -130,7 +171,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ 
       success: true, 
-      processed: people?.length || 0,
+      birthdaysProcessed: people?.length || 0,
+      remindersProcessed: customReminders?.length || 0,
       notificationsCreated: notificationsToInsert.length 
     });
   } catch (error: any) {
