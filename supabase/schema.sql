@@ -142,3 +142,18 @@ FOR UPDATE WITH CHECK (bucket_id = 'avatars');
 
 CREATE POLICY "Anyone can delete an avatar." ON storage.objects
 FOR DELETE USING (bucket_id = 'avatars');
+
+-- PHASE 5 Fix: Reminders Table (was missing)
+CREATE TABLE IF NOT EXISTS reminders (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    person_id UUID REFERENCES people(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    description TEXT,
+    scheduled_for TIMESTAMP WITH TIME ZONE NOT NULL,
+    is_completed BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE reminders ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can manage their reminders" ON reminders FOR ALL USING (auth.uid() = user_id);

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Plus, MessageCircle, Heart, ShieldAlert, Phone, Coffee, Gift, MessageSquare, Edit, X, Calendar } from "lucide-react"
+import { ArrowLeft, Plus, MessageCircle, Heart, ShieldAlert, Phone, Coffee, Gift, MessageSquare, Edit, X, Calendar, Sparkles, Loader2, Copy } from "lucide-react"
 import Link from "next/link"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
@@ -71,6 +71,12 @@ export default function PersonProfilePage() {
   const [reminderTitle, setReminderTitle] = useState("")
   const [reminderDate, setReminderDate] = useState("")
   const [savingReminder, setSavingReminder] = useState(false)
+
+  // AI Magic State
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false)
+  const [aiType, setAiType] = useState<'gift' | 'message' | 'poem' | 'website'>('gift')
+  const [aiGenerating, setAiGenerating] = useState(false)
+  const [aiResult, setAiResult] = useState<string | null>(null)
 
   useEffect(() => {
     fetchData()
@@ -265,8 +271,45 @@ export default function PersonProfilePage() {
     }
   }
 
+  const generateMagic = async () => {
+    setAiGenerating(true)
+    setAiResult(null)
+    try {
+      const res = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: aiType, person, interactions })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to generate')
+      setAiResult(data.result)
+    } catch (error: any) {
+      console.error(error)
+      alert(error.message)
+    } finally {
+      setAiGenerating(false)
+    }
+  }
+
   if (loading) return <div className="animate-pulse h-64 glass-panel rounded-xl" />
   if (!person) return <div>Person not found.</div>
+
+  // Check if birthday is coming up (within 14 days)
+  let isBirthdaySoon = false
+  if (person.birthday) {
+    const today = new Date()
+    const bday = new Date(person.birthday)
+    bday.setFullYear(today.getFullYear()) // Set birthday to this year
+    
+    // If birthday already passed this year, look at next year
+    if (bday < today) {
+      bday.setFullYear(today.getFullYear() + 1)
+    }
+    
+    const diffTime = Math.abs(bday.getTime() - today.getTime())
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    isBirthdaySoon = diffDays <= 14
+  }
 
   return (
     <div className="space-y-8">
@@ -291,10 +334,20 @@ export default function PersonProfilePage() {
                   <Edit className="h-4 w-4" />
                 </button>
               </div>
-              <Button onClick={() => setIsCreatingReminder(true)} variant="outline" className="gap-2 shrink-0 border-white/10 hover:bg-white/5">
-                <Calendar className="h-4 w-4" />
-                Remind Me
-              </Button>
+              <div className="flex items-center gap-3">
+                <Button 
+                  onClick={() => setIsAiModalOpen(true)} 
+                  className={`gap-2 shrink-0 border-white/10 ${isBirthdaySoon ? 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 shadow-[0_0_15px_rgba(168,85,247,0.5)] animate-pulse' : 'bg-white/5 hover:bg-white/10 text-white'}`}
+                  variant={isBirthdaySoon ? "default" : "outline"}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  AI Magic
+                </Button>
+                <Button onClick={() => setIsCreatingReminder(true)} variant="outline" className="gap-2 shrink-0 border-white/10 hover:bg-white/5">
+                  <Calendar className="h-4 w-4" />
+                  Remind Me
+                </Button>
+              </div>
             </div>
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               <span className="text-sm text-gray-400 capitalize">{person.relationship_type || "Connection"}</span>
@@ -614,6 +667,76 @@ export default function PersonProfilePage() {
                     </Button>
                   </div>
                 </form>
+              </motion.div>
+            </div>
+          )}
+
+          {isAiModalOpen && (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsAiModalOpen(false)}
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                className="relative w-full max-w-2xl bg-zinc-950 border border-white/10 shadow-2xl rounded-2xl flex flex-col overflow-hidden max-h-[85vh]"
+              >
+                <div className="p-6 border-b border-white/10 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-purple-400" />
+                    <h2 className="text-xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">AI Magic Generator</h2>
+                  </div>
+                  <button onClick={() => setIsAiModalOpen(false)} className="p-2 rounded-full hover:bg-white/10">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                
+                <div className="p-6 overflow-y-auto custom-scrollbar flex-1 flex flex-col">
+                  {isBirthdaySoon && (
+                    <div className="mb-6 p-4 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-200 text-sm">
+                      ✨ <strong>Event approaching!</strong> {person.name}'s birthday is coming up. Let's generate something special!
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
+                    {(['gift', 'message', 'poem', 'website'] as const).map(type => (
+                      <button
+                        key={type}
+                        onClick={() => { setAiType(type); setAiResult(null) }}
+                        className={`p-3 rounded-xl border text-sm font-medium transition-all ${aiType === type ? 'bg-purple-500/20 border-purple-500/50 text-purple-300' : 'bg-black/50 border-white/5 hover:border-white/10 text-gray-400 hover:text-white'}`}
+                      >
+                        {type.charAt(0).toUpperCase() + type.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+
+                  <Button onClick={generateMagic} disabled={aiGenerating} className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold h-12">
+                    {aiGenerating ? <Loader2 className="h-5 w-5 animate-spin" /> : `Generate ${aiType.charAt(0).toUpperCase() + aiType.slice(1)}`}
+                  </Button>
+
+                  {aiResult && (
+                    <div className="mt-6 flex-1 flex flex-col min-h-0">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-semibold text-gray-200">Result</h3>
+                        <Button variant="ghost" size="sm" onClick={() => navigator.clipboard.writeText(aiResult)} className="h-8 gap-2 text-gray-400 hover:text-white">
+                          <Copy className="h-4 w-4" /> Copy
+                        </Button>
+                      </div>
+                      <div className="bg-black/50 border border-white/10 p-4 rounded-xl text-gray-300 whitespace-pre-wrap overflow-y-auto flex-1 font-mono text-sm leading-relaxed">
+                        {aiType === 'website' ? (
+                          <div dangerouslySetInnerHTML={{ __html: aiResult }} />
+                        ) : (
+                          aiResult
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </motion.div>
             </div>
           )}
