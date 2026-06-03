@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
+import { NotificationCenter } from "@/components/NotificationCenter"
 import { Sparkles, Users, Calendar, Settings, LogOut, Search } from "lucide-react"
 
 export default function DashboardLayout({
@@ -98,6 +99,7 @@ export default function DashboardLayout({
           </div>
           
           <div className="flex items-center gap-4">
+            <NotificationCenter />
             <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-primary to-blue-500"></div>
           </div>
         </header>
