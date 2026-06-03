@@ -60,8 +60,8 @@ export default function PersonProfilePage() {
   
   // Edit State
   const [isEditing, setIsEditing] = useState(false)
-  const [editData, setEditData] = useState<{name: string, relationship_type: string, birthday: string, photo: string, phone: string, email: string, address: string}>({
-    name: '', relationship_type: '', birthday: '', photo: '', phone: '', email: '', address: ''
+  const [editData, setEditData] = useState<{name: string, relationship_type: string, birthday: string, photo: string, phone: string, email: string, address: string, strength_score: number, trust_score: number}>({
+    name: '', relationship_type: '', birthday: '', photo: '', phone: '', email: '', address: '', strength_score: 50, trust_score: 50
   })
   const [savingEdit, setSavingEdit] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -100,7 +100,9 @@ export default function PersonProfilePage() {
         photo: pData.photo || '',
         phone: pData.phone || '',
         email: pData.email || '',
-        address: pData.address || ''
+        address: pData.address || '',
+        strength_score: pData.strength_score || 50,
+        trust_score: pData.trust_score || 50
       })
 
       // Fetch Interactions
@@ -196,7 +198,9 @@ export default function PersonProfilePage() {
           photo: editData.photo || null,
           phone: editData.phone || null,
           email: editData.email || null,
-          address: editData.address || null
+          address: editData.address || null,
+          strength_score: editData.strength_score,
+          trust_score: editData.trust_score
         })
         .eq('id', personId)
 
@@ -582,6 +586,28 @@ export default function PersonProfilePage() {
                       onChange={e => setEditData({...editData, address: e.target.value})}
                       className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
                     />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm text-gray-400">Strength Score (0-100)</label>
+                      <input 
+                        type="number" 
+                        min="0" max="100"
+                        value={editData.strength_score}
+                        onChange={e => setEditData({...editData, strength_score: parseInt(e.target.value) || 0})}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm text-gray-400">Trust Score (0-100)</label>
+                      <input 
+                        type="number" 
+                        min="0" max="100"
+                        value={editData.trust_score}
+                        onChange={e => setEditData({...editData, trust_score: parseInt(e.target.value) || 0})}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm text-gray-400">Photo</label>

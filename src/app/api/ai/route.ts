@@ -3,15 +3,15 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 // Initialize Gemini API
 // Use a dummy key if env var is missing during build time, but it will fail at runtime if truly missing.
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'MISSING_KEY')
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || 'MISSING_KEY')
 
 export async function POST(req: Request) {
   try {
     const { type, person, interactions } = await req.json()
 
-    if (!process.env.GEMINI_API_KEY) {
+    if (!process.env.GOOGLE_API_KEY && !process.env.GEMINI_API_KEY) {
       return NextResponse.json(
-        { error: "GEMINI_API_KEY is not set in your .env.local file." },
+        { error: "GOOGLE_API_KEY is not set in your .env.local file." },
         { status: 500 }
       )
     }
