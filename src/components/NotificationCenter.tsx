@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { Bell, X, CheckCircle2 } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
@@ -98,83 +99,86 @@ export function NotificationCenter() {
         )}
       </button>
 
-      <AnimatePresence>
-        {isOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsOpen(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
-            />
-            <motion.div
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", bounce: 0, duration: 0.4 }}
-              className="fixed top-0 right-0 bottom-0 w-full max-w-md bg-zinc-950 border-l border-white/10 shadow-2xl z-50 flex flex-col"
-            >
-              <div className="p-6 border-b border-white/10 flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-bold">Notifications</h2>
-                  <p className="text-sm text-gray-400">Your latest relationship updates</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {unreadCount > 0 && (
-                    <Button variant="ghost" size="sm" onClick={markAllAsRead} className="text-xs">
-                      Mark all read
-                    </Button>
-                  )}
-                  <button onClick={() => setIsOpen(false)} className="p-2 rounded-full hover:bg-white/10">
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {notifications.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-gray-500">
-                    <Bell className="h-12 w-12 mb-4 opacity-20" />
-                    <p>No notifications yet</p>
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {isOpen && (
+            <div className="portal-root">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsOpen(false)}
+                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
+              />
+              <motion.div
+                initial={{ x: "100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "100%" }}
+                transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+                className="fixed top-0 right-0 bottom-0 w-full max-w-md bg-zinc-950 border-l border-white/10 shadow-2xl z-[101] flex flex-col"
+              >
+                <div className="p-6 border-b border-white/10 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold">Notifications</h2>
+                    <p className="text-sm text-gray-400">Your latest relationship updates</p>
                   </div>
-                ) : (
-                  notifications.map(notification => (
-                    <motion.div 
-                      key={notification.id}
-                      layout
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className={`p-4 rounded-xl border ${notification.read ? 'bg-white/5 border-transparent' : 'glass-panel border-primary/30'}`}
-                    >
-                      <div className="flex justify-between items-start mb-1">
-                        <h4 className={`font-medium ${notification.read ? 'text-gray-300' : 'text-white'}`}>
-                          {notification.title}
-                        </h4>
-                        {!notification.read && (
-                          <button 
-                            onClick={() => markAsRead(notification.id)}
-                            className="text-primary hover:text-white transition-colors"
-                            title="Mark as read"
-                          >
-                            <CheckCircle2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                      <p className={`text-sm ${notification.read ? 'text-gray-500' : 'text-gray-300'}`}>
-                        {notification.message}
-                      </p>
-                      <span className="text-[10px] text-gray-600 mt-3 block uppercase tracking-wider">
-                        {new Date(notification.created_at).toLocaleDateString()}
-                      </span>
-                    </motion.div>
-                  ))
-                )}
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+                  <div className="flex items-center gap-2">
+                    {unreadCount > 0 && (
+                      <Button variant="ghost" size="sm" onClick={markAllAsRead} className="text-xs">
+                        Mark all read
+                      </Button>
+                    )}
+                    <button onClick={() => setIsOpen(false)} className="p-2 rounded-full hover:bg-white/10">
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {notifications.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                      <Bell className="h-12 w-12 mb-4 opacity-20" />
+                      <p>No notifications yet</p>
+                    </div>
+                  ) : (
+                    notifications.map(notification => (
+                      <motion.div 
+                        key={notification.id}
+                        layout
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`p-4 rounded-xl border ${notification.read ? 'bg-white/5 border-transparent' : 'glass-panel border-primary/30'}`}
+                      >
+                        <div className="flex justify-between items-start mb-1">
+                          <h4 className={`font-medium ${notification.read ? 'text-gray-300' : 'text-white'}`}>
+                            {notification.title}
+                          </h4>
+                          {!notification.read && (
+                            <button 
+                              onClick={() => markAsRead(notification.id)}
+                              className="text-primary hover:text-white transition-colors"
+                              title="Mark as read"
+                            >
+                              <CheckCircle2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                        <p className={`text-sm ${notification.read ? 'text-gray-500' : 'text-gray-300'}`}>
+                          {notification.message}
+                        </p>
+                        <span className="text-[10px] text-gray-600 mt-3 block uppercase tracking-wider">
+                          {new Date(notification.created_at).toLocaleDateString()}
+                        </span>
+                      </motion.div>
+                    ))
+                  )}
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </>
   )
 }

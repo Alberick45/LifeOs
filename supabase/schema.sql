@@ -62,3 +62,59 @@ CREATE POLICY "Users can view their own subscriptions" ON push_subscriptions FOR
 CREATE POLICY "Users can insert their own subscriptions" ON push_subscriptions FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can delete their own subscriptions" ON push_subscriptions FOR DELETE USING (auth.uid() = user_id);
 
+-- Interactions Table (Timeline)
+CREATE TABLE IF NOT EXISTS interactions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    person_id UUID REFERENCES people(id) ON DELETE CASCADE,
+    type TEXT NOT NULL, -- e.g., 'call', 'meet', 'text', 'gift'
+    notes TEXT,
+    sentiment TEXT, -- 'positive', 'neutral', 'negative'
+    interaction_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Tags Table (Free-form)
+CREATE TABLE IF NOT EXISTS tags (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id, name)
+);
+
+-- Person-Tags Join Table
+CREATE TABLE IF NOT EXISTS person_tags (
+    person_id UUID REFERENCES people(id) ON DELETE CASCADE,
+    tag_id UUID REFERENCES tags(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    PRIMARY KEY (person_id, tag_id)
+);
+
+-- Connections Table (Graph)
+CREATE TABLE IF NOT EXISTS connections (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    person_a_id UUID REFERENCES people(id) ON DELETE CASCADE,
+    person_b_id UUID REFERENCES people(id) ON DELETE CASCADE,
+    connection_type TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(person_a_id, person_b_id)
+);
+
+-- Set up RLS for new tables
+ALTER TABLE interactions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can manage their interactions" ON interactions FOR ALL USING (auth.uid() = user_id);
+
+ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can manage their tags" ON tags FOR ALL USING (auth.uid() = user_id);
+
+ALTER TABLE person_tags ENABLE ROW LEVEL SECURITY;
+-- For join table, we rely on the person_id which belongs to the user, but we'll keep it simple for MVP
+CREATE POLICY "Users can manage their person_tags" ON person_tags FOR ALL USING (
+    EXISTS (SELECT 1 FROM people WHERE people.id = person_tags.person_id AND people.user_id = auth.uid())
+);
+
+ALTER TABLE connections ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can manage their connections" ON connections FOR ALL USING (auth.uid() = user_id);
+

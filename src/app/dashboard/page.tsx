@@ -87,46 +87,48 @@ export default function DashboardPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.1 }}
             >
-              <Card className="hover:bg-white/5 transition-colors cursor-pointer group h-full">
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-4">
-                      <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary/20 to-blue-500/20 border border-white/10 flex items-center justify-center overflow-hidden">
-                        {person.photo ? (
-                          <img src={person.photo} alt={person.name} className="h-full w-full object-cover" />
-                        ) : (
-                          <span className="text-lg font-bold text-primary">{person.name.charAt(0)}</span>
-                        )}
+              <Link href={`/dashboard/person/${person.id}`} className="block h-full">
+                <Card className="hover:bg-white/5 transition-colors cursor-pointer group h-full">
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary/20 to-blue-500/20 border border-white/10 flex items-center justify-center overflow-hidden">
+                          {person.photo ? (
+                            <img src={person.photo} alt={person.name} className="h-full w-full object-cover" />
+                          ) : (
+                            <span className="text-lg font-bold text-primary">{person.name.charAt(0)}</span>
+                          )}
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-lg">{person.name}</h3>
+                          <span className="text-xs px-2 py-1 rounded-full bg-white/10 text-gray-300 capitalize">
+                            {person.relationship_type || "Connection"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 mt-6 border-t border-white/10 pt-4">
+                      <div>
+                        <div className="flex items-center gap-1 text-xs text-gray-400 mb-1">
+                          <Heart className="h-3 w-3 text-rose-400" /> Strength
+                        </div>
+                        <div className="w-full bg-white/10 rounded-full h-1.5 mt-2">
+                          <div className="bg-rose-500 h-1.5 rounded-full" style={{ width: `${person.strength_score}%` }}></div>
+                        </div>
                       </div>
                       <div>
-                        <h3 className="font-semibold text-lg">{person.name}</h3>
-                        <span className="text-xs px-2 py-1 rounded-full bg-white/10 text-gray-300 capitalize">
-                          {person.relationship_type || "Connection"}
-                        </span>
+                        <div className="flex items-center gap-1 text-xs text-gray-400 mb-1">
+                          <ShieldAlert className="h-3 w-3 text-emerald-400" /> Trust
+                        </div>
+                        <div className="w-full bg-white/10 rounded-full h-1.5 mt-2">
+                          <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${person.trust_score}%` }}></div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4 mt-6 border-t border-white/10 pt-4">
-                    <div>
-                      <div className="flex items-center gap-1 text-xs text-gray-400 mb-1">
-                        <Heart className="h-3 w-3 text-rose-400" /> Strength
-                      </div>
-                      <div className="w-full bg-white/10 rounded-full h-1.5 mt-2">
-                        <div className="bg-rose-500 h-1.5 rounded-full" style={{ width: `${person.strength_score}%` }}></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1 text-xs text-gray-400 mb-1">
-                        <ShieldAlert className="h-3 w-3 text-emerald-400" /> Trust
-                      </div>
-                      <div className="w-full bg-white/10 rounded-full h-1.5 mt-2">
-                        <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${person.trust_score}%` }}></div>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </Link>
             </motion.div>
           ))}
         </div>
