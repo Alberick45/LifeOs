@@ -11,6 +11,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [user, setUser] = useState<any>(null)
+  const [testingPush, setTestingPush] = useState(false)
   
   // Profile State
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
@@ -91,6 +92,38 @@ export default function SettingsPage() {
       alert("Failed to save profile.")
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleTestPush = async () => {
+    if (!user) return;
+    setTestingPush(true);
+    try {
+      const res = await fetch('/api/push/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.id,
+          title: 'Hello from HumanOS!',
+          body: 'This is a test native push notification to ensure everything is working correctly.',
+          url: '/dashboard'
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (data.message === "No subscriptions found.") {
+           alert("You haven't enabled push notifications yet! Check the bottom right corner.");
+        } else {
+           alert(`Push notification sent successfully to ${data.count} devices!`);
+        }
+      } else {
+        alert('Failed to send push notification: ' + data.error);
+      }
+    } catch (error) {
+      console.error(error);
+      alert('An error occurred while sending the push notification.');
+    } finally {
+      setTestingPush(false);
     }
   }
 
@@ -222,6 +255,22 @@ export default function SettingsPage() {
                 className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-gray-500 cursor-not-allowed"
               />
               <p className="text-xs text-gray-500">Your email is managed by your authentication provider.</p>
+            </div>
+
+            <div className="space-y-2 mt-6">
+              <label className="text-sm text-gray-400">Push Notifications</label>
+              <div>
+                <Button 
+                  onClick={handleTestPush} 
+                  disabled={testingPush}
+                  variant="outline"
+                  className="bg-black/50 border border-white/10 text-white hover:bg-white/5"
+                >
+                  {testingPush ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Test Push Notification
+                </Button>
+              </div>
+              <p className="text-xs text-gray-500">Send a test push notification to verify your device is correctly receiving native background push messages.</p>
             </div>
           </div>
         </div>
