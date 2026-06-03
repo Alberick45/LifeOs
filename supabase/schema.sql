@@ -118,3 +118,27 @@ CREATE POLICY "Users can manage their person_tags" ON person_tags FOR ALL USING 
 ALTER TABLE connections ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can manage their connections" ON connections FOR ALL USING (auth.uid() = user_id);
 
+-- PHASE 5: Contact Info & Storage
+
+-- Add Contact Info to People
+ALTER TABLE people 
+ADD COLUMN IF NOT EXISTS phone TEXT,
+ADD COLUMN IF NOT EXISTS email TEXT,
+ADD COLUMN IF NOT EXISTS address TEXT;
+
+-- Create Storage Bucket for Avatars
+INSERT INTO storage.buckets (id, name, public) VALUES ('avatars', 'avatars', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Storage Policies
+CREATE POLICY "Avatar images are publicly accessible." ON storage.objects
+FOR SELECT USING (bucket_id = 'avatars');
+
+CREATE POLICY "Anyone can upload an avatar." ON storage.objects
+FOR INSERT WITH CHECK (bucket_id = 'avatars');
+
+CREATE POLICY "Anyone can update an avatar." ON storage.objects
+FOR UPDATE WITH CHECK (bucket_id = 'avatars');
+
+CREATE POLICY "Anyone can delete an avatar." ON storage.objects
+FOR DELETE USING (bucket_id = 'avatars');

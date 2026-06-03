@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Plus, MessageCircle, Heart, ShieldAlert, Phone, Coffee, Gift, MessageSquare, Edit, X } from "lucide-react"
+import { ArrowLeft, Plus, MessageCircle, Heart, ShieldAlert, Phone, Coffee, Gift, MessageSquare, Edit, X, Calendar } from "lucide-react"
 import Link from "next/link"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
@@ -14,6 +14,9 @@ type Person = {
   name: string
   relationship_type: string
   birthday: string | null
+  phone: string | null
+  email: string | null
+  address: string | null
   strength_score: number
   trust_score: number
   photo: string | null
@@ -53,12 +56,21 @@ export default function PersonProfilePage() {
   const [isLogging, setIsLogging] = useState(false)
   const [type, setType] = useState('meet')
   const [notes, setNotes] = useState('')
+  const [sentiment, setSentiment] = useState('positive')
+  
   // Edit State
   const [isEditing, setIsEditing] = useState(false)
-  const [editData, setEditData] = useState<{name: string, relationship_type: string, birthday: string, photo: string}>({
-    name: '', relationship_type: '', birthday: '', photo: ''
+  const [editData, setEditData] = useState<{name: string, relationship_type: string, birthday: string, photo: string, phone: string, email: string, address: string}>({
+    name: '', relationship_type: '', birthday: '', photo: '', phone: '', email: '', address: ''
   })
   const [savingEdit, setSavingEdit] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
+
+  // Reminder State
+  const [isCreatingReminder, setIsCreatingReminder] = useState(false)
+  const [reminderTitle, setReminderTitle] = useState("")
+  const [reminderDate, setReminderDate] = useState("")
+  const [savingReminder, setSavingReminder] = useState(false)
 
   useEffect(() => {
     fetchData()
@@ -79,7 +91,10 @@ export default function PersonProfilePage() {
         name: pData.name || '',
         relationship_type: pData.relationship_type || '',
         birthday: pData.birthday || '',
-        photo: pData.photo || ''
+        photo: pData.photo || '',
+        phone: pData.phone || '',
+        email: pData.email || '',
+        address: pData.address || ''
       })
 
       // Fetch Interactions
@@ -172,7 +187,10 @@ export default function PersonProfilePage() {
           name: editData.name,
           relationship_type: editData.relationship_type,
           birthday: editData.birthday || null,
-          photo: editData.photo || null
+          photo: editData.photo || null,
+          phone: editData.phone || null,
+          email: editData.email || null,
+          address: editData.address || null
         })
         .eq('id', personId)
 
@@ -185,6 +203,65 @@ export default function PersonProfilePage() {
       alert("Failed to save changes.")
     } finally {
       setSavingEdit(false)
+    }
+  }
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      setUploadingImage(true)
+      if (!e.target.files || e.target.files.length === 0) return
+
+      const file = e.target.files[0]
+      const fileExt = file.name.split('.').pop()
+      const filePath = `${Math.random()}.${fileExt}`
+
+      const { error: uploadError, data } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file)
+
+      if (uploadError) throw uploadError
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath)
+
+      setEditData({ ...editData, photo: publicUrl })
+    } catch (error) {
+      console.error('Error uploading image:', error)
+      alert('Error uploading image!')
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
+  const saveReminder = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSavingReminder(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const newReminder = {
+        user_id: user.id,
+        person_id: personId,
+        title: reminderTitle,
+        description: `Follow up with ${person?.name}`,
+        scheduled_for: new Date(reminderDate).toISOString(),
+        is_completed: false
+      }
+
+      const { error } = await supabase.from('reminders').insert([newReminder])
+      if (error) throw error
+
+      setIsCreatingReminder(false)
+      setReminderTitle("")
+      setReminderDate("")
+      alert("Reminder scheduled successfully!")
+    } catch (error) {
+      console.error("Error saving reminder:", error)
+      alert("Failed to schedule reminder.")
+    } finally {
+      setSavingReminder(false)
     }
   }
 
@@ -207,13 +284,19 @@ export default function PersonProfilePage() {
             )}
           </div>
           <div className="flex-1">
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold tracking-tight">{person.name}</h1>
-              <button onClick={() => setIsEditing(true)} className="p-1.5 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors" title="Edit Profile">
-                <Edit className="h-4 w-4" />
-              </button>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <h1 className="text-3xl font-bold tracking-tight">{person.name}</h1>
+                <button onClick={() => setIsEditing(true)} className="p-1.5 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors" title="Edit Profile">
+                  <Edit className="h-4 w-4" />
+                </button>
+              </div>
+              <Button onClick={() => setIsCreatingReminder(true)} variant="outline" className="gap-2 shrink-0 border-white/10 hover:bg-white/5">
+                <Calendar className="h-4 w-4" />
+                Remind Me
+              </Button>
             </div>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
               <span className="text-sm text-gray-400 capitalize">{person.relationship_type || "Connection"}</span>
               {person.birthday && (
                 <>
@@ -221,7 +304,22 @@ export default function PersonProfilePage() {
                   <span className="text-sm text-gray-400">Birthday: {new Date(person.birthday).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}</span>
                 </>
               )}
+              {person.phone && (
+                <>
+                  <span className="text-gray-600">•</span>
+                  <span className="text-sm text-gray-400">{person.phone}</span>
+                </>
+              )}
+              {person.email && (
+                <>
+                  <span className="text-gray-600">•</span>
+                  <span className="text-sm text-gray-400">{person.email}</span>
+                </>
+              )}
             </div>
+            {person.address && (
+              <div className="text-sm text-gray-400 mt-1">📍 {person.address}</div>
+            )}
           </div>
         </div>
       </div>
@@ -371,7 +469,7 @@ export default function PersonProfilePage() {
                   </button>
                 </div>
                 
-                <form onSubmit={saveEdit} className="p-6 space-y-4">
+                <form onSubmit={saveEdit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
                   <div className="space-y-2">
                     <label className="text-sm text-gray-400">Name</label>
                     <input 
@@ -382,41 +480,137 @@ export default function PersonProfilePage() {
                       className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
                     />
                   </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm text-gray-400">Relationship Type</label>
+                      <input 
+                        type="text" 
+                        placeholder="e.g. Friend"
+                        value={editData.relationship_type}
+                        onChange={e => setEditData({...editData, relationship_type: e.target.value})}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm text-gray-400">Birthday</label>
+                      <input 
+                        type="date" 
+                        value={editData.birthday}
+                        onChange={e => setEditData({...editData, birthday: e.target.value})}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm text-gray-400">Phone</label>
+                      <input 
+                        type="tel" 
+                        value={editData.phone}
+                        onChange={e => setEditData({...editData, phone: e.target.value})}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm text-gray-400">Email</label>
+                      <input 
+                        type="email" 
+                        value={editData.email}
+                        onChange={e => setEditData({...editData, email: e.target.value})}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
+                      />
+                    </div>
+                  </div>
                   <div className="space-y-2">
-                    <label className="text-sm text-gray-400">Relationship Type</label>
+                    <label className="text-sm text-gray-400">Address</label>
                     <input 
                       type="text" 
-                      placeholder="e.g. Friend, Coworker, Brother"
-                      value={editData.relationship_type}
-                      onChange={e => setEditData({...editData, relationship_type: e.target.value})}
+                      value={editData.address}
+                      onChange={e => setEditData({...editData, address: e.target.value})}
                       className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm text-gray-400">Birthday</label>
-                    <input 
-                      type="date" 
-                      value={editData.birthday}
-                      onChange={e => setEditData({...editData, birthday: e.target.value})}
-                      className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
-                    />
+                    <label className="text-sm text-gray-400">Photo</label>
+                    <div className="flex items-center gap-3">
+                      {editData.photo && <img src={editData.photo} className="h-10 w-10 rounded-full object-cover border border-white/10" />}
+                      <div className="flex-1">
+                        <label className="flex items-center justify-center w-full p-2 border border-dashed border-white/20 rounded-lg cursor-pointer hover:bg-white/5 transition-colors text-sm text-gray-300">
+                          {uploadingImage ? "Uploading..." : "Upload Photo"}
+                          <input 
+                            type="file" 
+                            accept="image/*"
+                            className="hidden" 
+                            onChange={handleImageUpload}
+                            disabled={uploadingImage}
+                          />
+                        </label>
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-sm text-gray-400">Photo URL</label>
-                    <input 
-                      type="url" 
-                      placeholder="https://..."
-                      value={editData.photo}
-                      onChange={e => setEditData({...editData, photo: e.target.value})}
-                      className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
-                    />
-                  </div>
-                  <div className="pt-4 flex gap-3">
+                  <div className="pt-4 flex gap-3 sticky bottom-0 bg-zinc-950 pb-2">
                     <Button type="button" variant="ghost" onClick={() => setIsEditing(false)} className="flex-1">
                       Cancel
                     </Button>
-                    <Button type="submit" disabled={savingEdit} className="flex-1">
+                    <Button type="submit" disabled={savingEdit || uploadingImage} className="flex-1">
                       {savingEdit ? "Saving..." : "Save Changes"}
+                    </Button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+
+          {isCreatingReminder && (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsCreatingReminder(false)}
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                className="relative w-full max-w-md bg-zinc-950 border border-white/10 shadow-2xl rounded-2xl flex flex-col overflow-hidden"
+              >
+                <div className="p-6 border-b border-white/10 flex items-center justify-between">
+                  <h2 className="text-xl font-bold">Set Reminder</h2>
+                  <button onClick={() => setIsCreatingReminder(false)} className="p-2 rounded-full hover:bg-white/10">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                
+                <form onSubmit={saveReminder} className="p-6 space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm text-gray-400">What to do?</label>
+                    <input 
+                      type="text" 
+                      value={reminderTitle}
+                      onChange={e => setReminderTitle(e.target.value)}
+                      placeholder={`e.g. Call ${person.name}`}
+                      required
+                      className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm text-gray-400">When?</label>
+                    <input 
+                      type="datetime-local" 
+                      value={reminderDate}
+                      onChange={e => setReminderDate(e.target.value)}
+                      required
+                      className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors [color-scheme:dark]"
+                    />
+                  </div>
+                  <div className="pt-4 flex gap-3">
+                    <Button type="button" variant="ghost" onClick={() => setIsCreatingReminder(false)} className="flex-1">
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={savingReminder} className="flex-1">
+                      {savingReminder ? "Saving..." : "Schedule Reminder"}
                     </Button>
                   </div>
                 </form>
