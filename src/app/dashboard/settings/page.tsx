@@ -11,7 +11,13 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [user, setUser] = useState<any>(null)
+  
+  // Profile State
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [fullName, setFullName] = useState("")
+  const [birthday, setBirthday] = useState("")
+  const [interests, setInterests] = useState("")
+  
   const [uploadingImage, setUploadingImage] = useState(false)
 
   useEffect(() => {
@@ -20,6 +26,9 @@ export default function SettingsPage() {
       if (session) {
         setUser(session.user)
         setAvatarUrl(session.user.user_metadata?.avatar_url || null)
+        setFullName(session.user.user_metadata?.full_name || "")
+        setBirthday(session.user.user_metadata?.birthday || "")
+        setInterests(session.user.user_metadata?.interests || "")
       } else {
         router.push("/login")
       }
@@ -62,6 +71,26 @@ export default function SettingsPage() {
     }
   }
 
+  const handleSaveProfile = async () => {
+    setSaving(true)
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          full_name: fullName,
+          birthday: birthday,
+          interests: interests
+        }
+      })
+      if (error) throw error
+      alert("Profile updated successfully!")
+    } catch (error: any) {
+      console.error(error)
+      alert("Failed to save profile.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   if (loading) return (
     <div className="flex h-full items-center justify-center">
       <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -88,7 +117,7 @@ export default function SettingsPage() {
                 </div>
               )}
               
-              <label className="absolute inset-0 bg-black/50 backdrop-blur-sm rounded-full flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
+              <label className={`absolute inset-0 bg-black/50 backdrop-blur-sm rounded-full flex flex-col items-center justify-center cursor-pointer transition-opacity ${uploadingImage ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                 {uploadingImage ? (
                   <Loader2 className="h-6 w-6 animate-spin text-white" />
                 ) : (
@@ -115,18 +144,56 @@ export default function SettingsPage() {
         </div>
 
         <div className="border-t border-white/5 pt-6">
-          <h2 className="text-xl font-semibold mb-4">Account Details</h2>
-          <div className="space-y-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">Account Details</h2>
+            <Button onClick={handleSaveProfile} disabled={saving} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save Profile
+            </Button>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <label className="text-sm text-gray-400">Email Address</label>
+              <label className="text-sm text-gray-400">Full Name</label>
               <input 
                 type="text" 
-                value={user?.email || ""}
-                disabled
-                className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-gray-500 cursor-not-allowed"
+                value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                placeholder="What should I call you?"
+                className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
               />
-              <p className="text-xs text-gray-500">Your email is managed by your authentication provider.</p>
             </div>
+            <div className="space-y-2">
+              <label className="text-sm text-gray-400">Birthday</label>
+              <input 
+                type="date" 
+                value={birthday}
+                onChange={e => setBirthday(e.target.value)}
+                className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
+              />
+            </div>
+          </div>
+          
+          <div className="mt-6 space-y-2">
+            <label className="text-sm text-gray-400">My Interests & Hobbies</label>
+            <textarea 
+              value={interests}
+              onChange={e => setInterests(e.target.value)}
+              placeholder="e.g. Loves reading sci-fi, obsessed with coffee, trying to learn guitar..."
+              className="w-full bg-black/50 border border-white/10 rounded-lg p-3 text-sm text-white min-h-[100px] focus:outline-none focus:border-primary/50 transition-colors"
+            />
+            <p className="text-xs text-gray-500">The AI will use this to generate personalized gifts and surprises for you on your birthday!</p>
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-white/5 space-y-2">
+            <label className="text-sm text-gray-400">Email Address</label>
+            <input 
+              type="text" 
+              value={user?.email || ""}
+              disabled
+              className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-gray-500 cursor-not-allowed"
+            />
+            <p className="text-xs text-gray-500">Your email is managed by your authentication provider.</p>
           </div>
         </div>
       </div>
