@@ -4,13 +4,16 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Plus, MessageCircle, Heart, ShieldAlert, Phone, Coffee, Gift, MessageSquare } from "lucide-react"
+import { ArrowLeft, Plus, MessageCircle, Heart, ShieldAlert, Phone, Coffee, Gift, MessageSquare, Edit, X } from "lucide-react"
 import Link from "next/link"
+import { createPortal } from "react-dom"
+import { motion, AnimatePresence } from "framer-motion"
 
 type Person = {
   id: string
   name: string
   relationship_type: string
+  birthday: string | null
   strength_score: number
   trust_score: number
   photo: string | null
@@ -50,7 +53,12 @@ export default function PersonProfilePage() {
   const [isLogging, setIsLogging] = useState(false)
   const [type, setType] = useState('meet')
   const [notes, setNotes] = useState('')
-  const [sentiment, setSentiment] = useState('positive')
+  // Edit State
+  const [isEditing, setIsEditing] = useState(false)
+  const [editData, setEditData] = useState<{name: string, relationship_type: string, birthday: string, photo: string}>({
+    name: '', relationship_type: '', birthday: '', photo: ''
+  })
+  const [savingEdit, setSavingEdit] = useState(false)
 
   useEffect(() => {
     fetchData()
@@ -67,6 +75,12 @@ export default function PersonProfilePage() {
       
       if (pError) throw pError
       setPerson(pData)
+      setEditData({
+        name: pData.name || '',
+        relationship_type: pData.relationship_type || '',
+        birthday: pData.birthday || '',
+        photo: pData.photo || ''
+      })
 
       // Fetch Interactions
       const { data: iData, error: iError } = await supabase
@@ -148,6 +162,32 @@ export default function PersonProfilePage() {
     }
   }
 
+  const saveEdit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSavingEdit(true)
+    try {
+      const { error } = await supabase
+        .from('people')
+        .update({
+          name: editData.name,
+          relationship_type: editData.relationship_type,
+          birthday: editData.birthday || null,
+          photo: editData.photo || null
+        })
+        .eq('id', personId)
+
+      if (error) throw error
+      
+      setPerson(prev => prev ? { ...prev, ...editData } : null)
+      setIsEditing(false)
+    } catch (error) {
+      console.error("Error saving person:", error)
+      alert("Failed to save changes.")
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
   if (loading) return <div className="animate-pulse h-64 glass-panel rounded-xl" />
   if (!person) return <div>Person not found.</div>
 
@@ -155,20 +195,33 @@ export default function PersonProfilePage() {
     <div className="space-y-8">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full hover:bg-white/10">
+        <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full hover:bg-white/10 shrink-0">
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex items-center gap-4 flex-1">
-          <div className="h-16 w-16 rounded-full bg-gradient-to-br from-primary/20 to-blue-500/20 border border-white/10 flex items-center justify-center overflow-hidden">
+          <div className="h-16 w-16 rounded-full bg-gradient-to-br from-primary/20 to-blue-500/20 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
             {person.photo ? (
               <img src={person.photo} alt={person.name} className="h-full w-full object-cover" />
             ) : (
               <span className="text-2xl font-bold text-primary">{person.name.charAt(0)}</span>
             )}
           </div>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">{person.name}</h1>
-            <span className="text-sm text-gray-400 capitalize">{person.relationship_type || "Connection"}</span>
+          <div className="flex-1">
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold tracking-tight">{person.name}</h1>
+              <button onClick={() => setIsEditing(true)} className="p-1.5 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors" title="Edit Profile">
+                <Edit className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-sm text-gray-400 capitalize">{person.relationship_type || "Connection"}</span>
+              {person.birthday && (
+                <>
+                  <span className="text-gray-600">•</span>
+                  <span className="text-sm text-gray-400">Birthday: {new Date(person.birthday).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}</span>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -292,6 +345,87 @@ export default function PersonProfilePage() {
         </div>
 
       </div>
+
+      {/* Edit Modal using Portal */}
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {isEditing && (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsEditing(false)}
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                className="relative w-full max-w-md bg-zinc-950 border border-white/10 shadow-2xl rounded-2xl flex flex-col overflow-hidden"
+              >
+                <div className="p-6 border-b border-white/10 flex items-center justify-between">
+                  <h2 className="text-xl font-bold">Edit Profile</h2>
+                  <button onClick={() => setIsEditing(false)} className="p-2 rounded-full hover:bg-white/10">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                
+                <form onSubmit={saveEdit} className="p-6 space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm text-gray-400">Name</label>
+                    <input 
+                      type="text" 
+                      value={editData.name}
+                      onChange={e => setEditData({...editData, name: e.target.value})}
+                      required
+                      className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm text-gray-400">Relationship Type</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. Friend, Coworker, Brother"
+                      value={editData.relationship_type}
+                      onChange={e => setEditData({...editData, relationship_type: e.target.value})}
+                      className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm text-gray-400">Birthday</label>
+                    <input 
+                      type="date" 
+                      value={editData.birthday}
+                      onChange={e => setEditData({...editData, birthday: e.target.value})}
+                      className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm text-gray-400">Photo URL</label>
+                    <input 
+                      type="url" 
+                      placeholder="https://..."
+                      value={editData.photo}
+                      onChange={e => setEditData({...editData, photo: e.target.value})}
+                      className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
+                    />
+                  </div>
+                  <div className="pt-4 flex gap-3">
+                    <Button type="button" variant="ghost" onClick={() => setIsEditing(false)} className="flex-1">
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={savingEdit} className="flex-1">
+                      {savingEdit ? "Saving..." : "Save Changes"}
+                    </Button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   )
 }

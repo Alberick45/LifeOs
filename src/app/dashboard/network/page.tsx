@@ -99,8 +99,7 @@ export default function NetworkGraphPage() {
         ) : (
           <ForceGraph2D
             graphData={graphData}
-            nodeLabel="name"
-            nodeColor="color"
+            nodeLabel="" // We draw it manually now
             nodeRelSize={6}
             linkColor={() => "rgba(255,255,255,0.2)"}
             backgroundColor="#00000000" // transparent to see glass panel
@@ -108,6 +107,26 @@ export default function NetworkGraphPage() {
             height={600}
             d3AlphaDecay={0.05}
             d3VelocityDecay={0.4}
+            nodeCanvasObject={(node: any, ctx, globalScale) => {
+              const label = node.name;
+              const fontSize = 12/globalScale;
+              ctx.font = `${fontSize}px Sans-Serif`;
+              const textWidth = ctx.measureText(label).width;
+              const bckgDimensions = [textWidth, fontSize].map(n => n + fontSize * 0.2); // some padding
+
+              ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+              ctx.beginPath();
+              // Node Circle
+              ctx.arc(node.x, node.y, node.val, 0, 2 * Math.PI, false);
+              ctx.fillStyle = node.color;
+              ctx.fill();
+
+              // Node Label
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillStyle = '#ffffff';
+              ctx.fillText(label, node.x, node.y + node.val + (fontSize/2) + 2);
+            }}
           />
         )}
       </div>

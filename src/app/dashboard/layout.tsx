@@ -77,10 +77,6 @@ export default function DashboardLayout({
             <Calendar className="h-4 w-4" />
             Reminders
           </Link>
-          <Link href="/dashboard/settings" className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors">
-            <Settings className="h-4 w-4" />
-            Settings
-          </Link>
         </nav>
 
         <div className="p-4 border-t border-white/5">
