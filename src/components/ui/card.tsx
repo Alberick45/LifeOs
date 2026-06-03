@@ -10,13 +10,13 @@ const Card = React.forwardRef<
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ duration: 0.4 }}
-    ref={ref}
+    ref={ref as any}
     className={cn(
       "rounded-xl border bg-card text-card-foreground shadow-sm",
       glass && "glass-panel",
       className
     )}
-    {...props}
+    {...props as any}
   />
 ))
 Card.displayName = "Card"

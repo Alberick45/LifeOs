@@ -15,7 +15,7 @@ const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), {
 export default function NetworkGraphPage() {
   const [graphData, setGraphData] = useState<{ nodes: any[], links: any[] }>({ nodes: [], links: [] })
   const [loading, setLoading] = useState(true)
-  const fgRef = useRef<any>()
+  const fgRef = useRef<any>(null)
   const router = useRouter()
 
   useEffect(() => {

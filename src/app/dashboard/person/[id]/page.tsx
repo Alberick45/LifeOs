@@ -21,6 +21,7 @@ type Person = {
   trust_score: number
   photo: string | null
   pronouns: string | null
+  is_archived: boolean
 }
 
 type Interaction = {
