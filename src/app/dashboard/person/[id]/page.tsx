@@ -529,8 +529,19 @@ export default function PersonProfilePage() {
         {/* Left Column: Stats & Logging */}
         <div className="space-y-6">
           <div className="glass-panel p-6 rounded-xl">
-            <h3 className="font-semibold mb-4 flex items-center gap-2"><Heart className="h-4 w-4 text-rose-400" /> Relationship Health</h3>
-            
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <Heart className="h-5 w-5 text-rose-500" /> Relationship Health
+                </h3>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => generateMagic('summary')} className="border-white/10 text-yellow-400 hover:text-yellow-300 hover:bg-yellow-400/10 h-8 text-xs px-2">
+                    <Sparkles className="mr-1.5 h-3 w-3" /> Summary
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => generateMagic('conflict')} className="border-white/10 text-red-400 hover:text-red-300 hover:bg-red-400/10 h-8 text-xs px-2">
+                    <ShieldAlert className="mr-1.5 h-3 w-3" /> Conflict
+                  </Button>
+                </div>
+              </div>   
             <div className="space-y-4">
               <div>
                 <div className="flex justify-between text-sm mb-1">
@@ -873,7 +884,7 @@ export default function PersonProfilePage() {
                   )}
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
-                    {(['gift', 'message', 'summary', 'conflict', 'poem', 'website'] as const).map(type => (
+                    {(['gift', 'message', 'poem', 'website'] as const).map(type => (
                       <button
                         key={type}
                         onClick={() => { setAiType(type); setAiResult(null) }}
