@@ -51,9 +51,15 @@ function DashboardContent() {
     }
   }
 
-  const toggleArchive = async (e: React.MouseEvent, personId: string, currentState: boolean) => {
+  const toggleArchive = async (e: React.MouseEvent, personId: string, currentState: boolean, personName: string) => {
     e.preventDefault()
     e.stopPropagation()
+    
+    const actionStr = currentState ? "unarchive" : "archive"
+    if (!window.confirm(`Are you sure you want to ${actionStr} ${personName}?`)) {
+      return
+    }
+
     const newState = !currentState
     
     setPeople(people.map(p => p.id === personId ? { ...p, is_archived: newState } : p))
@@ -153,7 +159,7 @@ function DashboardContent() {
                         </div>
                       </div>
                       <button 
-                        onClick={(e) => toggleArchive(e, person.id, person.is_archived)}
+                        onClick={(e) => toggleArchive(e, person.id, person.is_archived, person.name)}
                         className={`p-1.5 rounded-full hover:bg-white/10 transition-colors ${person.is_archived ? 'text-red-400 hover:text-red-300' : 'text-gray-500 hover:text-white'}`}
                         title={person.is_archived ? "Unarchive" : "Archive"}
                       >
