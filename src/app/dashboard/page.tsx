@@ -17,6 +17,7 @@ type Person = {
   strength_score: number
   trust_score: number
   photo: string | null
+  is_archived: boolean
 }
 
 function DashboardContent() {
@@ -50,6 +51,8 @@ function DashboardContent() {
   }
 
   const filteredPeople = people.filter(p => {
+    if (p.is_archived) return false
+    
     if (!q) return true
     const s = q.toLowerCase()
     return (p.name?.toLowerCase() || "").includes(s) || (p.relationship_type?.toLowerCase() || "").includes(s)

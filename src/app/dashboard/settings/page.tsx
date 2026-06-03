@@ -17,6 +17,7 @@ export default function SettingsPage() {
   const [fullName, setFullName] = useState("")
   const [birthday, setBirthday] = useState("")
   const [interests, setInterests] = useState("")
+  const [apiKey, setApiKey] = useState("")
   
   const [uploadingImage, setUploadingImage] = useState(false)
 
@@ -29,6 +30,7 @@ export default function SettingsPage() {
         setFullName(session.user.user_metadata?.full_name || "")
         setBirthday(session.user.user_metadata?.birthday || "")
         setInterests(session.user.user_metadata?.interests || "")
+        setApiKey(session.user.user_metadata?.gemini_api_key || "")
       } else {
         router.push("/login")
       }
@@ -78,7 +80,8 @@ export default function SettingsPage() {
         data: {
           full_name: fullName,
           birthday: birthday,
-          interests: interests
+          interests: interests,
+          gemini_api_key: apiKey
         }
       })
       if (error) throw error
@@ -185,15 +188,41 @@ export default function SettingsPage() {
             <p className="text-xs text-gray-500">The AI will use this to generate personalized gifts and surprises for you on your birthday!</p>
           </div>
 
-          <div className="mt-8 pt-6 border-t border-white/5 space-y-2">
-            <label className="text-sm text-gray-400">Email Address</label>
-            <input 
-              type="text" 
-              value={user?.email || ""}
-              disabled
-              className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-gray-500 cursor-not-allowed"
-            />
-            <p className="text-xs text-gray-500">Your email is managed by your authentication provider.</p>
+          <div className="mt-8 pt-6 border-t border-white/5 space-y-4">
+            <h3 className="text-lg font-medium text-white">System Settings</h3>
+            
+            <div className="space-y-2">
+              <label className="text-sm text-gray-400">Custom Gemini API Key</label>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input 
+                  type="password" 
+                  value={apiKey}
+                  onChange={e => setApiKey(e.target.value)}
+                  placeholder="AIzaSy..."
+                  className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors font-mono"
+                />
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <div className={`h-2 w-2 rounded-full ${apiKey ? 'bg-green-500' : 'bg-blue-500'}`}></div>
+                <p className="text-xs text-gray-500">
+                  {apiKey 
+                    ? "You are currently using your own custom API Key." 
+                    : "You are currently using the default system API Key."}
+                </p>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">Bring your own Google Gemini API key to bypass system rate limits and errors.</p>
+            </div>
+            
+            <div className="space-y-2 mt-6">
+              <label className="text-sm text-gray-400">Email Address</label>
+              <input 
+                type="text" 
+                value={user?.email || ""}
+                disabled
+                className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-gray-500 cursor-not-allowed"
+              />
+              <p className="text-xs text-gray-500">Your email is managed by your authentication provider.</p>
+            </div>
           </div>
         </div>
       </div>

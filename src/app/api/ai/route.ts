@@ -1,21 +1,28 @@
 import { NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
-
-// Initialize Gemini API
-// Use a dummy key if env var is missing during build time, but it will fail at runtime if truly missing.
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || 'MISSING_KEY')
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
 
 export async function POST(req: Request) {
   try {
     const { type, person, interactions, tags } = await req.json()
 
-    if (!process.env.GOOGLE_API_KEY && !process.env.GEMINI_API_KEY) {
+    const supabase = createRouteHandlerClient({ cookies })
+    const { data: { session } } = await supabase.auth.getSession()
+
+    // Priority: Custom User Key > Global Env Key > Fallback Error
+    const userApiKey = session?.user?.user_metadata?.gemini_api_key
+    const systemApiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY
+    const finalKey = userApiKey || systemApiKey
+
+    if (!finalKey) {
       return NextResponse.json(
-        { error: "GOOGLE_API_KEY is not set in your .env.local file." },
+        { error: "No API key found. Please add one in Settings or the .env.local file." },
         { status: 500 }
       )
     }
 
+    const genAI = new GoogleGenerativeAI(finalKey)
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
     // Build context about the person
@@ -55,6 +62,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ result: text })
   } catch (error: any) {
     console.error("AI Generation Error:", error)
+    
+    // Check if it's a rate limit or high demand error
+    if (error.message?.includes("503") || error.message?.includes("Service Unavailable")) {
+      return NextResponse.json(
+        { error: "The AI is currently experiencing high demand. Please wait a moment and try again, or add your own custom API key in Settings!" },
+        { status: 503 }
+      )
+    }
+
     return NextResponse.json(
       { error: "Failed to generate AI content.", details: error.message },
       { status: 500 }

@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS people (
     status TEXT,
     strength_score INT DEFAULT 50,
     trust_score INT DEFAULT 50,
+    is_archived BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

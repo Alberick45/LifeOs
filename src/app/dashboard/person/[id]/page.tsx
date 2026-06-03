@@ -66,8 +66,8 @@ export default function PersonProfilePage() {
   
   // Edit State
   const [isEditing, setIsEditing] = useState(false)
-  const [editData, setEditData] = useState<{name: string, relationship_type: string, birthday: string, photo: string, phone: string, email: string, address: string, strength_score: number, trust_score: number}>({
-    name: '', relationship_type: '', birthday: '', photo: '', phone: '', email: '', address: '', strength_score: 50, trust_score: 50
+  const [editData, setEditData] = useState<{name: string, relationship_type: string, birthday: string, photo: string, phone: string, email: string, address: string, strength_score: number, trust_score: number, is_archived: boolean}>({
+    name: '', relationship_type: '', birthday: '', photo: '', phone: '', email: '', address: '', strength_score: 50, trust_score: 50, is_archived: false
   })
   const [savingEdit, setSavingEdit] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -112,7 +112,8 @@ export default function PersonProfilePage() {
         email: pData.email || '',
         address: pData.address || '',
         strength_score: pData.strength_score || 50,
-        trust_score: pData.trust_score || 50
+        trust_score: pData.trust_score || 50,
+        is_archived: pData.is_archived || false
       })
 
       // Fetch Interactions
@@ -221,7 +222,8 @@ export default function PersonProfilePage() {
           email: editData.email || null,
           address: editData.address || null,
           strength_score: editData.strength_score,
-          trust_score: editData.trust_score
+          trust_score: editData.trust_score,
+          is_archived: editData.is_archived
         })
         .eq('id', personId)
 
@@ -296,18 +298,20 @@ export default function PersonProfilePage() {
     }
   }
 
-  const generateMagic = async () => {
+  const generateMagic = async (type: string) => {
     setAiGenerating(true)
     setAiResult(null)
+    setAiType(type as any)
     try {
       const res = await fetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: aiType, person, interactions, tags })
+        body: JSON.stringify({ type, person, interactions, tags })
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to generate')
       setAiResult(data.result)
+      setIsAiModalOpen(true)
     } catch (error: any) {
       console.error(error)
       alert(error.message)
@@ -617,6 +621,13 @@ export default function PersonProfilePage() {
           <div className="glass-panel p-6 rounded-xl min-h-[500px]">
             <h3 className="font-semibold mb-6 text-xl">Interaction Timeline</h3>
             
+            {person.is_archived && (
+              <div className="mb-6 flex items-center gap-2 px-4 py-3 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20">
+                <ShieldAlert className="h-5 w-5" /> 
+                <span className="text-sm font-medium">This relationship is archived.</span>
+              </div>
+            )}
+
             {interactions.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-gray-500">
                 <MessageCircle className="h-12 w-12 mb-4 opacity-20" />
@@ -763,6 +774,22 @@ export default function PersonProfilePage() {
                       />
                     </div>
                   </div>
+                  
+                  <div className="pt-4 border-t border-white/10 mt-2 flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-medium text-red-400">Archive Relationship</h4>
+                      <p className="text-xs text-gray-500">Hide this person from your main dashboard.</p>
+                    </div>
+                    <Button 
+                      type="button"
+                      variant={editData.is_archived ? "default" : "outline"}
+                      className={editData.is_archived ? "bg-red-500 hover:bg-red-600" : "border-red-500/50 text-red-400 hover:bg-red-500/10"}
+                      onClick={() => setEditData({...editData, is_archived: !editData.is_archived})}
+                    >
+                      {editData.is_archived ? "Archived" : "Archive"}
+                    </Button>
+                  </div>
+                  
                   <div className="space-y-2">
                     <label className="text-sm text-gray-400">Photo</label>
                     <div className="flex items-center gap-3">
@@ -895,7 +922,7 @@ export default function PersonProfilePage() {
                     ))}
                   </div>
 
-                  <Button onClick={generateMagic} disabled={aiGenerating} className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold h-12">
+                  <Button onClick={() => generateMagic(aiType)} disabled={aiGenerating} className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold h-12">
                     {aiGenerating ? <Loader2 className="h-5 w-5 animate-spin" /> : `Generate ${aiType.charAt(0).toUpperCase() + aiType.slice(1)}`}
                   </Button>
 
