@@ -52,12 +52,12 @@ export default function NetworkGraphPage() {
       // Format for react-force-graph
       // Note: We'll add the "User" as the central node
       const nodes = [
-        { id: user.id, name: "Me (You)", group: "user", val: 30, pronouns: "They/Them", color: "#8b5cf6" },
+        { id: user.id, name: "Me (You)", group: "user", val: 30, pronouns: "Rather not say", color: "#8b5cf6" },
         ...(people || []).map(p => ({
           id: p.id,
           name: p.name,
           group: p.relationship_type,
-          pronouns: p.pronouns || 'They/Them',
+          pronouns: p.pronouns || 'Rather not say',
           val: Math.max(10, (p.strength_score || 50) / 3), // Node size based on strength
           color: "#3b82f6"
         }))

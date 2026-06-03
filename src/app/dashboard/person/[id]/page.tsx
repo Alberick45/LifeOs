@@ -68,7 +68,7 @@ export default function PersonProfilePage() {
   // Edit State
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState<{name: string, relationship_type: string, birthday: string, photo: string, phone: string, email: string, address: string, strength_score: number, trust_score: number, is_archived: boolean, pronouns: string}>({
-    name: '', relationship_type: '', birthday: '', photo: '', phone: '', email: '', address: '', strength_score: 50, trust_score: 50, is_archived: false, pronouns: 'They/Them'
+    name: '', relationship_type: '', birthday: '', photo: '', phone: '', email: '', address: '', strength_score: 50, trust_score: 50, is_archived: false, pronouns: 'Rather not say'
   })
   const [savingEdit, setSavingEdit] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -122,7 +122,7 @@ export default function PersonProfilePage() {
         strength_score: pData.strength_score || 50,
         trust_score: pData.trust_score || 50,
         is_archived: pData.is_archived || false,
-        pronouns: pData.pronouns || 'They/Them'
+        pronouns: pData.pronouns || 'Rather not say'
       })
 
       // Fetch Interactions
@@ -845,7 +845,7 @@ export default function PersonProfilePage() {
                       >
                         <option value="He/Him">He/Him</option>
                         <option value="She/Her">She/Her</option>
-                        <option value="They/Them">They/Them</option>
+                        <option value="Rather not say">Rather not say</option>
                         <option value="Other">Other</option>
                       </select>
                     </div>

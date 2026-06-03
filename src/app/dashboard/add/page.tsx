@@ -16,7 +16,7 @@ export default function AddPersonPage() {
   const [formData, setFormData] = useState({
     name: "",
     relationship_type: "",
-    pronouns: "They/Them",
+    pronouns: "Rather not say",
     birthday: "",
     strength_score: 50,
     trust_score: 50,
@@ -100,7 +100,7 @@ export default function AddPersonPage() {
                     >
                       <option value="He/Him">He/Him</option>
                       <option value="She/Her">She/Her</option>
-                      <option value="They/Them">They/Them</option>
+                      <option value="Rather not say">Rather not say</option>
                       <option value="Other">Other</option>
                     </select>
                   </div>
