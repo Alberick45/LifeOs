@@ -147,13 +147,16 @@ export default function PersonProfilePage() {
       // Fetch All People (for linking)
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        const { data: allPeopleData } = await supabase
+        const { data: allPeopleData, error: peopleFetchErr } = await supabase
           .from('people')
-          .select('id, name, photo, is_archived')
+          .select('*')
           .eq('user_id', user.id)
+        
+        console.log("DEBUG: allPeopleData", allPeopleData, "error:", peopleFetchErr)
         
         // Filter out archived people explicitly in JS to handle NULL safely
         const activePeople = (allPeopleData || []).filter(p => p.is_archived !== true)
+        console.log("DEBUG: activePeople", activePeople)
         setAllPeople(activePeople)
 
         // Fetch Connections
