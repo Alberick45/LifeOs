@@ -17,6 +17,7 @@ export default function SettingsPage() {
   // Profile State
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [fullName, setFullName] = useState("")
+  const [handle, setHandle] = useState("")
   const [birthday, setBirthday] = useState("")
   const [interests, setInterests] = useState("")
   const [apiKey, setApiKey] = useState("")
@@ -33,6 +34,10 @@ export default function SettingsPage() {
         setBirthday(session.user.user_metadata?.birthday || "")
         setInterests(session.user.user_metadata?.interests || "")
         setApiKey(session.user.user_metadata?.gemini_api_key || "")
+
+        // Fetch Handle
+        const { data: profile } = await supabase.from('profiles').select('handle').eq('id', session.user.id).single()
+        if (profile) setHandle(profile.handle || "")
       } else {
         router.push("/login")
       }
@@ -75,6 +80,12 @@ export default function SettingsPage() {
       await supabase.auth.updateUser({
         data: { avatar_url: data.publicUrl }
       })
+
+      // Also upsert to profiles table
+      await supabase.from('profiles').upsert({
+        id: user.id,
+        avatar_url: data.publicUrl
+      })
       
     } catch (error: any) {
       console.error(error)
@@ -96,6 +107,20 @@ export default function SettingsPage() {
         }
       })
       if (error) throw error
+
+      // Upsert Handle
+      if (handle) {
+        // Basic validation: alphanumeric + underscores
+        const sanitizedHandle = handle.replace(/[^a-zA-Z0-9_]/g, "").toLowerCase()
+        const { error: profileError } = await supabase.from('profiles').upsert({
+          id: user.id,
+          handle: sanitizedHandle,
+          avatar_url: avatarUrl
+        })
+        if (profileError) throw profileError
+        setHandle(sanitizedHandle) // Update UI with sanitized handle
+      }
+
       alert("Profile updated successfully!")
     } catch (error: any) {
       console.error(error)
@@ -266,6 +291,19 @@ export default function SettingsPage() {
                 placeholder="What should I call you?"
                 className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
               />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm text-gray-400">@handle (Unique ID)</label>
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 text-gray-500">@</span>
+                <input 
+                  type="text" 
+                  value={handle}
+                  onChange={e => setHandle(e.target.value)}
+                  placeholder="your_handle"
+                  className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 pl-8 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
+                />
+              </div>
             </div>
             <div className="space-y-2">
               <label className="text-sm text-gray-400">Birthday</label>

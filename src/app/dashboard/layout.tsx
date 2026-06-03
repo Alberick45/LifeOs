@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { NotificationCenter } from "@/components/NotificationCenter"
 import { PushNotificationManager } from "@/components/PushNotificationManager"
-import { Sparkles, Users, Calendar, Settings, LogOut, Search, Share2, BarChart2 } from "lucide-react"
+import { Sparkles, Users, Calendar, Settings, LogOut, Search, Share2, BarChart2, Globe } from "lucide-react"
 
 export default function DashboardLayout({
   children,
@@ -95,6 +95,10 @@ export default function DashboardLayout({
           <Link href="/dashboard/reminders" className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors">
             <Calendar className="h-4 w-4" />
             Reminders
+          </Link>
+          <Link href="/dashboard/connect" className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors">
+            <Globe className="h-4 w-4" />
+            Connect
           </Link>
         </nav>
 

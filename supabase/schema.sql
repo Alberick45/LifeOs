@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS people (
     strength_score INT DEFAULT 50,
     trust_score INT DEFAULT 50,
     is_archived BOOLEAN DEFAULT FALSE,
+    linked_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -157,3 +158,49 @@ CREATE TABLE IF NOT EXISTS reminders (
 
 ALTER TABLE reminders ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can manage their reminders" ON reminders FOR ALL USING (auth.uid() = user_id);
+
+-- PHASE 6: Social Identity Layer
+
+-- Profiles Table (Publicly searchable handles)
+CREATE TABLE IF NOT EXISTS profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    handle TEXT UNIQUE,
+    avatar_url TEXT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Profiles are publicly viewable" ON profiles FOR SELECT USING (true);
+CREATE POLICY "Users can insert their own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "Users can update their own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
+
+-- Link Requests Table
+CREATE TABLE IF NOT EXISTS link_requests (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    sender_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    receiver_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    relationship_type TEXT,
+    status TEXT DEFAULT 'pending', -- 'pending', 'accepted', 'rejected'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(sender_id, receiver_id)
+);
+
+ALTER TABLE link_requests ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can view link requests sent to or by them" ON link_requests FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
+CREATE POLICY "Users can send link requests" ON link_requests FOR INSERT WITH CHECK (auth.uid() = sender_id);
+CREATE POLICY "Users can update link requests sent to them" ON link_requests FOR UPDATE USING (auth.uid() = receiver_id OR auth.uid() = sender_id);
+CREATE POLICY "Users can delete their own requests" ON link_requests FOR DELETE USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
+
+-- Verified Links Table (The Multiplayer Social Graph)
+CREATE TABLE IF NOT EXISTS verified_links (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_a UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    user_b UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    relationship_type TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_a, user_b)
+);
+
+ALTER TABLE verified_links ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can view their own verified links" ON verified_links FOR SELECT USING (auth.uid() = user_a OR auth.uid() = user_b);
+CREATE POLICY "System can manage verified links" ON verified_links FOR ALL USING (auth.uid() = user_a OR auth.uid() = user_b);
