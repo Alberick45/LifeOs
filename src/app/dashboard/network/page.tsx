@@ -22,9 +22,9 @@ export default function NetworkGraphPage() {
 
   useEffect(() => {
     if (fgRef.current) {
-      // Increase repulsion to spread nodes out
-      fgRef.current.d3Force('charge').strength(-400)
-      fgRef.current.d3Force('link').distance(100)
+      // Increase repulsion to spread nodes out heavily
+      fgRef.current.d3Force('charge').strength(-800)
+      fgRef.current.d3Force('link').distance(150)
     }
   }, [graphData, loading])
 
@@ -36,7 +36,7 @@ export default function NetworkGraphPage() {
       // Fetch all people
       const { data: people, error: pError } = await supabase
         .from('people')
-        .select('id, name, relationship_type, strength_score')
+        .select('id, name, relationship_type, strength_score, pronouns')
         .eq('user_id', user.id)
 
       if (pError) throw pError
@@ -52,11 +52,12 @@ export default function NetworkGraphPage() {
       // Format for react-force-graph
       // Note: We'll add the "User" as the central node
       const nodes = [
-        { id: user.id, name: "Me (You)", group: "user", val: 30, color: "#8b5cf6" },
+        { id: user.id, name: "Me (You)", group: "user", val: 30, pronouns: "They/Them", color: "#8b5cf6" },
         ...(people || []).map(p => ({
           id: p.id,
           name: p.name,
           group: p.relationship_type,
+          pronouns: p.pronouns || 'They/Them',
           val: Math.max(10, (p.strength_score || 50) / 3), // Node size based on strength
           color: "#3b82f6"
         }))
@@ -122,19 +123,28 @@ export default function NetworkGraphPage() {
               const fontSize = 12/globalScale;
               const size = Math.max(8, node.val / 1.5); // Sane rendering size
 
-              ctx.beginPath();
-              // Node Circle
-              ctx.arc(node.x, node.y, size, 0, 2 * Math.PI, false);
+              // Determine Emoji based on pronouns
+              let emoji = "🧑"
+              if (node.pronouns === "He/Him") emoji = "👨"
+              if (node.pronouns === "She/Her") emoji = "👩"
+
+              // Draw Emoji
+              ctx.font = `${size * 2}px Sans-Serif`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
               
-              // Give "Me" a glowing effect
+              // Give "Me" a glowing effect behind the emoji
               if (node.id === graphData.nodes[0]?.id) {
                 ctx.shadowColor = node.color;
                 ctx.shadowBlur = 15;
+                ctx.fillStyle = node.color;
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, size, 0, 2 * Math.PI, false);
+                ctx.fill();
               }
               
-              ctx.fillStyle = node.color;
-              ctx.fill();
               ctx.shadowBlur = 0; // reset
+              ctx.fillText(emoji, node.x, node.y);
 
               // Node Label
               ctx.font = `${fontSize}px Sans-Serif`;

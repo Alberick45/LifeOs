@@ -20,6 +20,7 @@ type Person = {
   strength_score: number
   trust_score: number
   photo: string | null
+  pronouns: string | null
 }
 
 type Interaction = {
@@ -66,8 +67,8 @@ export default function PersonProfilePage() {
   
   // Edit State
   const [isEditing, setIsEditing] = useState(false)
-  const [editData, setEditData] = useState<{name: string, relationship_type: string, birthday: string, photo: string, phone: string, email: string, address: string, strength_score: number, trust_score: number, is_archived: boolean}>({
-    name: '', relationship_type: '', birthday: '', photo: '', phone: '', email: '', address: '', strength_score: 50, trust_score: 50, is_archived: false
+  const [editData, setEditData] = useState<{name: string, relationship_type: string, birthday: string, photo: string, phone: string, email: string, address: string, strength_score: number, trust_score: number, is_archived: boolean, pronouns: string}>({
+    name: '', relationship_type: '', birthday: '', photo: '', phone: '', email: '', address: '', strength_score: 50, trust_score: 50, is_archived: false, pronouns: 'They/Them'
   })
   const [savingEdit, setSavingEdit] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -120,7 +121,8 @@ export default function PersonProfilePage() {
         address: pData.address || '',
         strength_score: pData.strength_score || 50,
         trust_score: pData.trust_score || 50,
-        is_archived: pData.is_archived || false
+        is_archived: pData.is_archived || false,
+        pronouns: pData.pronouns || 'They/Them'
       })
 
       // Fetch Interactions
@@ -250,7 +252,8 @@ export default function PersonProfilePage() {
           address: editData.address || null,
           strength_score: editData.strength_score,
           trust_score: editData.trust_score,
-          is_archived: editData.is_archived
+          is_archived: editData.is_archived,
+          pronouns: editData.pronouns
         })
         .eq('id', personId)
 
@@ -489,6 +492,12 @@ export default function PersonProfilePage() {
             </div>
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               <span className="text-sm text-gray-400 capitalize">{person.relationship_type || "Connection"}</span>
+              {person.pronouns && (
+                <>
+                  <span className="text-gray-600">•</span>
+                  <span className="text-sm text-gray-400">{person.pronouns}</span>
+                </>
+              )}
               {person.birthday && (
                 <>
                   <span className="text-gray-600">•</span>
@@ -827,6 +836,21 @@ export default function PersonProfilePage() {
                         className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
                       />
                     </div>
+                    <div className="space-y-2">
+                      <label className="text-sm text-gray-400">Pronouns</label>
+                      <select 
+                        value={editData.pronouns}
+                        onChange={e => setEditData({...editData, pronouns: e.target.value})}
+                        className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors [&>option]:bg-zinc-900"
+                      >
+                        <option value="He/Him">He/Him</option>
+                        <option value="She/Her">She/Her</option>
+                        <option value="They/Them">They/Them</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="text-sm text-gray-400">Birthday</label>
                       <input 

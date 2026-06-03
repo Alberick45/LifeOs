@@ -16,6 +16,7 @@ export default function AddPersonPage() {
   const [formData, setFormData] = useState({
     name: "",
     relationship_type: "",
+    pronouns: "They/Them",
     birthday: "",
     strength_score: 50,
     trust_score: 50,
@@ -34,6 +35,7 @@ export default function AddPersonPage() {
           user_id: user.id,
           name: formData.name,
           relationship_type: formData.relationship_type,
+          pronouns: formData.pronouns,
           birthday: formData.birthday || null,
           strength_score: formData.strength_score,
           trust_score: formData.trust_score,
@@ -90,6 +92,19 @@ export default function AddPersonPage() {
                     />
                   </div>
                   <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-300">Pronouns</label>
+                    <select 
+                      value={formData.pronouns}
+                      onChange={(e) => setFormData({...formData, pronouns: e.target.value})}
+                      className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-primary/50 [&>option]:bg-zinc-900"
+                    >
+                      <option value="He/Him">He/Him</option>
+                      <option value="She/Her">She/Her</option>
+                      <option value="They/Them">They/Them</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2 col-span-2">
                     <label className="text-sm font-medium text-gray-300">Birthday</label>
                     <Input 
                       type="date"

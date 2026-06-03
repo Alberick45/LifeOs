@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS people (
     birthday DATE,
     photo TEXT,
     relationship_type TEXT,
+    pronouns TEXT,
     status TEXT,
     strength_score INT DEFAULT 50,
     trust_score INT DEFAULT 50,
