@@ -1,17 +1,11 @@
 import { NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 
 export async function POST(req: Request) {
   try {
-    const { type, person, interactions, tags } = await req.json()
-
-    const supabase = createRouteHandlerClient({ cookies })
-    const { data: { session } } = await supabase.auth.getSession()
+    const { type, person, interactions, tags, userApiKey } = await req.json()
 
     // Priority: Custom User Key > Global Env Key > Fallback Error
-    const userApiKey = session?.user?.user_metadata?.gemini_api_key
     const systemApiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY
     const finalKey = userApiKey || systemApiKey
 

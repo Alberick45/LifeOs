@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Plus, User, Heart, ShieldAlert, Loader2 } from "lucide-react"
+import { Plus, User, Heart, ShieldAlert, Loader2, Archive, ArchiveRestore } from "lucide-react"
 import { motion } from "framer-motion"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
@@ -23,6 +23,7 @@ type Person = {
 function DashboardContent() {
   const [people, setPeople] = useState<Person[]>([])
   const [loading, setLoading] = useState(true)
+  const [showArchived, setShowArchived] = useState(false)
   const searchParams = useSearchParams()
   const q = searchParams.get('q')
 
@@ -50,8 +51,27 @@ function DashboardContent() {
     }
   }
 
+  const toggleArchive = async (e: React.MouseEvent, personId: string, currentState: boolean) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const newState = !currentState
+    
+    setPeople(people.map(p => p.id === personId ? { ...p, is_archived: newState } : p))
+    
+    try {
+      await supabase
+        .from('people')
+        .update({ is_archived: newState })
+        .eq('id', personId)
+    } catch (err) {
+      console.error("Failed to toggle archive state", err)
+      // revert on failure
+      setPeople(people.map(p => p.id === personId ? { ...p, is_archived: currentState } : p))
+    }
+  }
+
   const filteredPeople = people.filter(p => {
-    if (p.is_archived) return false
+    if (showArchived ? !p.is_archived : p.is_archived) return false
     
     if (!q) return true
     const s = q.toLowerCase()
@@ -65,11 +85,20 @@ function DashboardContent() {
           <h1 className="text-3xl font-bold tracking-tight">Your Network</h1>
           <p className="text-gray-400 mt-1">Manage and nurture your relationships.</p>
         </div>
-        <Link href="/dashboard/add">
-          <Button className="rounded-full shadow-[0_0_15px_rgba(139,92,246,0.5)]">
-            <Plus className="mr-2 h-4 w-4" /> Add Person
+        <div className="flex gap-2">
+          <Button 
+            variant={showArchived ? "default" : "outline"}
+            onClick={() => setShowArchived(!showArchived)}
+            className={`rounded-full ${showArchived ? "bg-red-500 hover:bg-red-600 text-white" : "border-white/10 text-gray-400 hover:text-white"}`}
+          >
+            <Archive className="mr-2 h-4 w-4" /> {showArchived ? "Viewing Archived" : "View Archived"}
           </Button>
-        </Link>
+          <Link href="/dashboard/add">
+            <Button className="rounded-full shadow-[0_0_15px_rgba(139,92,246,0.5)]">
+              <Plus className="mr-2 h-4 w-4" /> Add Person
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {loading ? (
@@ -123,6 +152,13 @@ function DashboardContent() {
                           </span>
                         </div>
                       </div>
+                      <button 
+                        onClick={(e) => toggleArchive(e, person.id, person.is_archived)}
+                        className={`p-1.5 rounded-full hover:bg-white/10 transition-colors ${person.is_archived ? 'text-red-400 hover:text-red-300' : 'text-gray-500 hover:text-white'}`}
+                        title={person.is_archived ? "Unarchive" : "Archive"}
+                      >
+                        {person.is_archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+                      </button>
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4 mt-6 border-t border-white/10 pt-4">

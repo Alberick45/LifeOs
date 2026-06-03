@@ -303,10 +303,13 @@ export default function PersonProfilePage() {
     setAiResult(null)
     setAiType(type as any)
     try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const userApiKey = session?.user?.user_metadata?.gemini_api_key
+
       const res = await fetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, person, interactions, tags })
+        body: JSON.stringify({ type, person, interactions, tags, userApiKey })
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to generate')
@@ -664,42 +667,6 @@ export default function PersonProfilePage() {
           </div>
         </div>
 
-      </div>
-
-      {/* Danger Zone: Archive at bottom of page */}
-      <div className="mt-8 pt-8 border-t border-red-500/20">
-        <div className="glass-panel p-6 rounded-xl border border-red-500/30 bg-red-950/20 max-w-3xl">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-semibold text-red-400 flex items-center gap-2">
-                <ShieldAlert className="h-5 w-5" /> Archive Relationship
-              </h3>
-              <p className="text-sm text-gray-400 mt-1">
-                This will hide {person.name} from your main dashboard without deleting any of your memories or logged interactions.
-              </p>
-            </div>
-            <Button 
-              variant={person.is_archived ? "default" : "outline"}
-              className={`shrink-0 ${person.is_archived ? "bg-red-500 hover:bg-red-600 text-white border-none" : "border-red-500/50 text-red-400 hover:bg-red-500/10"}`}
-              onClick={async () => {
-                const newArchivedState = !person.is_archived;
-                setPerson({...person, is_archived: newArchivedState});
-                setEditData({...editData, is_archived: newArchivedState});
-                
-                try {
-                  await supabase
-                    .from('people')
-                    .update({ is_archived: newArchivedState })
-                    .eq('id', personId);
-                } catch (e) {
-                  console.error("Failed to archive", e);
-                }
-              }}
-            >
-              {person.is_archived ? "Unarchive Person" : "Archive Person"}
-            </Button>
-          </div>
-        </div>
       </div>
 
       {/* Edit Modal using Portal */}
