@@ -688,27 +688,35 @@ export default function PersonProfilePage() {
                 setIsLinking(false)
               }
             }} className="space-y-3 pt-4 border-t border-white/10">
-              <select 
-                value={newConnectionId}
-                onChange={e => setNewConnectionId(e.target.value)}
-                required
-                className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-primary/50 [&>option]:bg-zinc-900"
-              >
-                <option value="">Select a person...</option>
-                {allPeople.filter(p => p.id !== personId).map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-              <input
-                type="text"
-                placeholder="Relationship (e.g. Spouse, Friend)"
-                value={newConnectionType}
-                onChange={e => setNewConnectionType(e.target.value)}
-                className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-primary/50"
-              />
-              <Button type="submit" disabled={isLinking || !newConnectionId} className="w-full h-8 text-xs">
-                {isLinking ? "Linking..." : "Add Link"}
-              </Button>
+              {allPeople.length <= 1 ? (
+                <div className="text-sm text-gray-400 bg-white/5 p-3 rounded-lg border border-white/10 text-center">
+                  Add more people to your network to create connections!
+                </div>
+              ) : (
+                <>
+                  <select 
+                    value={newConnectionId}
+                    onChange={e => setNewConnectionId(e.target.value)}
+                    required
+                    className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-primary/50 [&>option]:bg-zinc-900"
+                  >
+                    <option value="">Select a person...</option>
+                    {allPeople.filter(p => p.id !== personId).map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Relationship (e.g. Spouse, Friend)"
+                    value={newConnectionType}
+                    onChange={e => setNewConnectionType(e.target.value)}
+                    className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-primary/50"
+                  />
+                  <Button type="submit" disabled={isLinking || !newConnectionId} className="w-full h-8 text-xs">
+                    {isLinking ? "Linking..." : "Add Link"}
+                  </Button>
+                </>
+              )}
             </form>
           </div>
         </div>
