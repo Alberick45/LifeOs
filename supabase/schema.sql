@@ -60,9 +60,7 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 -- Set up Row Level Security (RLS) for push_subscriptions
 ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view their own subscriptions" ON push_subscriptions FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert their own subscriptions" ON push_subscriptions FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can delete their own subscriptions" ON push_subscriptions FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "Enable ALL for users based on user_id" ON push_subscriptions FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- Interactions Table (Timeline)
 CREATE TABLE IF NOT EXISTS interactions (

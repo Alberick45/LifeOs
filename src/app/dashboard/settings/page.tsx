@@ -99,9 +99,14 @@ export default function SettingsPage() {
     if (!user) return;
     setTestingPush(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
       const res = await fetch('/api/push/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
         body: JSON.stringify({
           user_id: user.id,
           title: 'Hello from HumanOS!',

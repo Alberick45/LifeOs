@@ -18,8 +18,16 @@ export async function POST(request: Request) {
     if (!user_id) {
       return NextResponse.json({ success: false, error: 'user_id is required' }, { status: 400 });
     }
+    
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader) {
+      return new NextResponse('Unauthorized', { status: 401 });
+    }
+    const token = authHeader.replace('Bearer ', '');
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } }
+    });
 
     // Get the user's subscriptions
     const { data: subscriptions, error } = await supabase
