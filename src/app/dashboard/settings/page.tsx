@@ -127,6 +127,58 @@ export default function SettingsPage() {
     }
   }
 
+  const handleSyncPush = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      alert("Push notifications are not supported by your browser.");
+      return;
+    }
+    
+    setTestingPush(true);
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      
+      const urlBase64ToUint8Array = (base64String: string) => {
+        const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+        const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) {
+          outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
+      }
+      
+      const sub = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(
+          process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!
+        ),
+      });
+
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const res = await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify(sub),
+      });
+      
+      if (res.ok) {
+         alert("Successfully enabled and synced with database! You can now test it.");
+      } else {
+         alert("Failed to sync subscription with database.");
+      }
+    } catch (error: any) {
+      console.error(error);
+      alert("Error subscribing: " + error.message);
+    } finally {
+      setTestingPush(false);
+    }
+  }
+
   if (loading) return (
     <div className="flex h-full items-center justify-center">
       <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -259,18 +311,25 @@ export default function SettingsPage() {
 
             <div className="space-y-2 mt-6">
               <label className="text-sm text-gray-400">Push Notifications</label>
-              <div>
+              <div className="flex items-center gap-3">
+                <Button 
+                  onClick={handleSyncPush} 
+                  disabled={testingPush}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                >
+                  {testingPush ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Enable Notifications
+                </Button>
                 <Button 
                   onClick={handleTestPush} 
                   disabled={testingPush}
                   variant="outline"
                   className="bg-black/50 border border-white/10 text-white hover:bg-white/5"
                 >
-                  {testingPush ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                  Test Push Notification
+                  Test Push
                 </Button>
               </div>
-              <p className="text-xs text-gray-500">Send a test push notification to verify your device is correctly receiving native background push messages.</p>
+              <p className="text-xs text-gray-500">First click "Enable", then click "Test Push" to verify your device is correctly receiving messages.</p>
             </div>
           </div>
         </div>
