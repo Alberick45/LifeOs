@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Plus, MessageCircle, Heart, ShieldAlert, Phone, Coffee, Gift, MessageSquare, Edit, X, Calendar, Sparkles, Loader2, Copy, Tag } from "lucide-react"
+import { ArrowLeft, Plus, MessageCircle, Heart, ShieldAlert, Phone, Coffee, Gift, MessageSquare, Edit, X, Calendar, Sparkles, Loader2, Copy, Tag, Mail, MapPin } from "lucide-react"
 import Link from "next/link"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
@@ -451,20 +451,40 @@ export default function PersonProfilePage() {
                 </>
               )}
               {person.phone && (
-                <>
+                <div className="flex items-center gap-1 group">
                   <span className="text-gray-600">•</span>
-                  <span className="text-sm text-gray-400">{person.phone}</span>
-                </>
+                  <span className="text-sm text-gray-400 group-hover:text-white transition-colors">{person.phone}</span>
+                  <div className="hidden group-hover:flex items-center gap-1 ml-2">
+                    <a href={`tel:${person.phone.replace(/[^0-9+]/g, '')}`} className="p-1 hover:bg-white/10 rounded-full transition-colors text-green-400" title="Call">
+                      <Phone className="h-3 w-3" />
+                    </a>
+                    <a href={`https://wa.me/${person.phone.replace(/[^0-9+]/g, '')}`} target="_blank" rel="noopener noreferrer" className="p-1 hover:bg-white/10 rounded-full transition-colors text-green-400" title="WhatsApp">
+                      <MessageCircle className="h-3 w-3" />
+                    </a>
+                  </div>
+                </div>
               )}
               {person.email && (
-                <>
+                <div className="flex items-center gap-1 group">
                   <span className="text-gray-600">•</span>
-                  <span className="text-sm text-gray-400">{person.email}</span>
-                </>
+                  <a href={`mailto:${person.email}`} className="text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-1">
+                    {person.email}
+                    <Mail className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </a>
+                </div>
               )}
             </div>
             {person.address && (
-              <div className="text-sm text-gray-400 mt-1">📍 {person.address}</div>
+              <a 
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(person.address)}`} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-blue-400 transition-colors mt-2 group"
+              >
+                <MapPin className="h-3 w-3 text-blue-500" /> 
+                {person.address}
+                <span className="opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-white/10 px-1.5 rounded">Map</span>
+              </a>
             )}
             
             {/* Tagging System */}
