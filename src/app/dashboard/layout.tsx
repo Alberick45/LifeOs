@@ -16,6 +16,7 @@ export default function DashboardLayout({
 }) {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
 
   useEffect(() => {
     const checkUser = async () => {
@@ -23,6 +24,7 @@ export default function DashboardLayout({
       if (!session) {
         router.push("/login")
       } else {
+        setAvatarUrl(session.user.user_metadata?.avatar_url || null)
         setLoading(false)
       }
     }
@@ -33,6 +35,8 @@ export default function DashboardLayout({
       (event, session) => {
         if (!session) {
           router.push("/login")
+        } else {
+          setAvatarUrl(session.user.user_metadata?.avatar_url || null)
         }
       }
     )
@@ -79,7 +83,11 @@ export default function DashboardLayout({
           </Link>
         </nav>
 
-        <div className="p-4 border-t border-white/5">
+        <div className="p-4 border-t border-white/5 space-y-1">
+          <Link href="/dashboard/settings" className="flex items-center w-full px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
+            <Settings className="h-4 w-4 mr-2" />
+            Settings
+          </Link>
           <Button variant="ghost" className="w-full justify-start text-gray-400 hover:text-white" onClick={handleSignOut}>
             <LogOut className="h-4 w-4 mr-2" />
             Sign Out
@@ -101,7 +109,13 @@ export default function DashboardLayout({
           
           <div className="flex items-center gap-4">
             <NotificationCenter />
-            <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-primary to-blue-500"></div>
+            <Link href="/dashboard/settings" className="block transition-transform hover:scale-105">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Profile" className="h-8 w-8 rounded-full object-cover border border-white/10" />
+              ) : (
+                <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-primary to-blue-500 border border-white/10 flex items-center justify-center text-xs font-bold text-white shadow-lg"></div>
+              )}
+            </Link>
           </div>
         </header>
         
