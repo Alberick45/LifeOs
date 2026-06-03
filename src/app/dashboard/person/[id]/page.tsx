@@ -692,7 +692,7 @@ export default function PersonProfilePage() {
                 value={newConnectionId}
                 onChange={e => setNewConnectionId(e.target.value)}
                 required
-                className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-primary/50 [&>option]:text-black"
+                className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-primary/50 [&>option]:bg-zinc-900"
               >
                 <option value="">Select a person...</option>
                 {allPeople.filter(p => p.id !== personId).map(p => (
