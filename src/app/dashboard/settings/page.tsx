@@ -12,6 +12,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [testingPush, setTestingPush] = useState(false)
+  const [isSubscribed, setIsSubscribed] = useState(false)
   
   // Profile State
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
@@ -38,6 +39,15 @@ export default function SettingsPage() {
       setLoading(false)
     }
     fetchUser()
+    
+    // Check if browser is already subscribed
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      navigator.serviceWorker.ready.then(reg => {
+        reg.pushManager.getSubscription().then(sub => {
+          if (sub) setIsSubscribed(true)
+        })
+      })
+    }
   }, [router])
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -172,6 +182,7 @@ export default function SettingsPage() {
       });
       
       if (res.ok) {
+         setIsSubscribed(true);
          alert("Successfully enabled and synced with database! You can now test it.");
       } else {
          alert("Failed to sync subscription with database.");
@@ -317,14 +328,16 @@ export default function SettingsPage() {
             <div className="space-y-2 mt-6">
               <label className="text-sm text-gray-400">Push Notifications</label>
               <div className="flex items-center gap-3">
-                <Button 
-                  onClick={handleSyncPush} 
-                  disabled={testingPush}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground"
-                >
-                  {testingPush ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                  Enable Notifications
-                </Button>
+                {!isSubscribed && (
+                  <Button 
+                    onClick={handleSyncPush} 
+                    disabled={testingPush}
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                  >
+                    {testingPush ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Enable Notifications
+                  </Button>
+                )}
                 <Button 
                   onClick={handleTestPush} 
                   disabled={testingPush}
@@ -334,7 +347,11 @@ export default function SettingsPage() {
                   Test Push
                 </Button>
               </div>
-              <p className="text-xs text-gray-500">First click "Enable", then click "Test Push" to verify your device is correctly receiving messages.</p>
+              <p className="text-xs text-gray-500">
+                {!isSubscribed 
+                  ? 'First click "Enable", then click "Test Push" to verify your device is correctly receiving messages.' 
+                  : 'Your device is successfully registered for native push notifications!'}
+              </p>
             </div>
           </div>
         </div>
