@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { supabase } from "@/lib/supabase/client"
 import dynamic from 'next/dynamic'
 import { Sparkles, Users } from "lucide-react"
@@ -14,10 +14,19 @@ const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), {
 export default function NetworkGraphPage() {
   const [graphData, setGraphData] = useState<{ nodes: any[], links: any[] }>({ nodes: [], links: [] })
   const [loading, setLoading] = useState(true)
+  const fgRef = useRef<any>()
 
   useEffect(() => {
     fetchGraphData()
   }, [])
+
+  useEffect(() => {
+    if (fgRef.current) {
+      // Increase repulsion to spread nodes out
+      fgRef.current.d3Force('charge').strength(-400)
+      fgRef.current.d3Force('link').distance(100)
+    }
+  }, [graphData, loading])
 
   const fetchGraphData = async () => {
     try {
@@ -98,6 +107,7 @@ export default function NetworkGraphPage() {
           </div>
         ) : (
           <ForceGraph2D
+            ref={fgRef}
             graphData={graphData}
             nodeLabel="" // We draw it manually now
             nodeRelSize={6}
@@ -110,22 +120,33 @@ export default function NetworkGraphPage() {
             nodeCanvasObject={(node: any, ctx, globalScale) => {
               const label = node.name;
               const fontSize = 12/globalScale;
-              ctx.font = `${fontSize}px Sans-Serif`;
-              const textWidth = ctx.measureText(label).width;
-              const bckgDimensions = [textWidth, fontSize].map(n => n + fontSize * 0.2); // some padding
+              const size = Math.max(8, node.val / 1.5); // Sane rendering size
 
-              ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
               ctx.beginPath();
               // Node Circle
-              ctx.arc(node.x, node.y, node.val, 0, 2 * Math.PI, false);
+              ctx.arc(node.x, node.y, size, 0, 2 * Math.PI, false);
+              
+              // Give "Me" a glowing effect
+              if (node.id === graphData.nodes[0]?.id) {
+                ctx.shadowColor = node.color;
+                ctx.shadowBlur = 15;
+              }
+              
               ctx.fillStyle = node.color;
               ctx.fill();
+              ctx.shadowBlur = 0; // reset
 
               // Node Label
+              ctx.font = `${fontSize}px Sans-Serif`;
               ctx.textAlign = 'center';
               ctx.textBaseline = 'middle';
               ctx.fillStyle = '#ffffff';
-              ctx.fillText(label, node.x, node.y + node.val + (fontSize/2) + 2);
+              
+              // Text outline for readability
+              ctx.lineWidth = 2 / globalScale;
+              ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+              ctx.strokeText(label, node.x, node.y + size + (fontSize/2) + 4);
+              ctx.fillText(label, node.x, node.y + size + (fontSize/2) + 4);
             }}
           />
         )}
