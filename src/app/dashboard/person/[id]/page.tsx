@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Plus, MessageCircle, Heart, ShieldAlert, Phone, Coffee, Gift, MessageSquare, Edit, X, Calendar, Sparkles, Loader2, Copy, Tag, Mail, MapPin } from "lucide-react"
+import { ArrowLeft, Plus, MessageCircle, Heart, ShieldAlert, Phone, Coffee, Gift, MessageSquare, Edit, X, Calendar, Sparkles, Loader2, Copy, Tag, Mail, MapPin, Network } from "lucide-react"
 import Link from "next/link"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
@@ -88,6 +88,13 @@ export default function PersonProfilePage() {
   const [newTag, setNewTag] = useState("")
   const [addingTag, setAddingTag] = useState(false)
 
+  // Connections State
+  const [allPeople, setAllPeople] = useState<any[]>([])
+  const [connections, setConnections] = useState<any[]>([])
+  const [newConnectionId, setNewConnectionId] = useState("")
+  const [newConnectionType, setNewConnectionType] = useState("")
+  const [isLinking, setIsLinking] = useState(false)
+
   useEffect(() => {
     fetchData()
   }, [personId])
@@ -136,6 +143,17 @@ export default function PersonProfilePage() {
       
       const mappedTags = (tData || []).map((t: any) => t.tags).filter(Boolean) as TagData[]
       setTags(mappedTags)
+
+      // Fetch All People (for linking)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: allPeopleData } = await supabase.from('people').select('id, name, photo').eq('user_id', user.id).eq('is_archived', false)
+        setAllPeople(allPeopleData || [])
+
+        // Fetch Connections
+        const { data: connectionsData } = await supabase.from('connections').select('*').or(`person_a_id.eq.${personId},person_b_id.eq.${personId}`)
+        setConnections(connectionsData || [])
+      }
 
     } catch (error) {
       console.error("Error fetching data:", error)
@@ -614,6 +632,82 @@ export default function PersonProfilePage() {
 
               <Button type="submit" disabled={isLogging} className="w-full">
                 {isLogging ? "Saving..." : "Save Memory"}
+              </Button>
+            </form>
+          </div>
+
+          {/* Connections / Graph Links */}
+          <div className="glass-panel p-6 rounded-xl">
+            <h3 className="font-semibold mb-4 flex items-center gap-2"><Network className="h-4 w-4 text-primary" /> Connected To</h3>
+            
+            <div className="space-y-3 mb-4">
+              {connections.length === 0 && <p className="text-sm text-gray-400">No connections added yet.</p>}
+              {connections.map(c => {
+                const isPersonA = c.person_a_id === personId
+                const otherPersonId = isPersonA ? c.person_b_id : c.person_a_id
+                const otherPerson = allPeople.find(p => p.id === otherPersonId)
+                if (!otherPerson) return null
+                
+                return (
+                  <Link href={`/dashboard/person/${otherPerson.id}`} key={c.id} className="flex items-center justify-between bg-white/5 p-2 rounded-lg border border-white/5 hover:bg-white/10 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden">
+                         {otherPerson.photo ? <img src={otherPerson.photo} className="w-full h-full object-cover" /> : <span className="text-[10px] text-primary font-bold">{otherPerson.name.charAt(0)}</span>}
+                      </div>
+                      <span className="text-sm font-medium">{otherPerson.name}</span>
+                    </div>
+                    <span className="text-xs text-gray-400 capitalize">{c.connection_type || 'Connected'}</span>
+                  </Link>
+                )
+              })}
+            </div>
+
+            <form onSubmit={async (e) => {
+              e.preventDefault()
+              if (!newConnectionId) return
+              setIsLinking(true)
+              try {
+                const { data: { user } } = await supabase.auth.getUser()
+                const { data, error } = await supabase.from('connections').insert([{
+                  user_id: user?.id,
+                  person_a_id: personId,
+                  person_b_id: newConnectionId,
+                  connection_type: newConnectionType
+                }]).select().single()
+                
+                if (error) {
+                  alert("Connection might already exist!")
+                } else {
+                  setConnections([...connections, data])
+                  setNewConnectionId("")
+                  setNewConnectionType("")
+                }
+              } catch (e) {
+                console.error(e)
+              } finally {
+                setIsLinking(false)
+              }
+            }} className="space-y-3 pt-4 border-t border-white/10">
+              <select 
+                value={newConnectionId}
+                onChange={e => setNewConnectionId(e.target.value)}
+                required
+                className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-primary/50 [&>option]:text-black"
+              >
+                <option value="">Select a person...</option>
+                {allPeople.filter(p => p.id !== personId).map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                placeholder="Relationship (e.g. Spouse, Friend)"
+                value={newConnectionType}
+                onChange={e => setNewConnectionType(e.target.value)}
+                className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-primary/50"
+              />
+              <Button type="submit" disabled={isLinking || !newConnectionId} className="w-full h-8 text-xs">
+                {isLinking ? "Linking..." : "Add Link"}
               </Button>
             </form>
           </div>
