@@ -36,19 +36,21 @@ export default function AnalyticsPage() {
 
   const fetchData = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      const { data: { session }, error: authError } = await supabase.auth.getSession()
+      if (authError) throw authError;
+      if (!session?.user) return
 
       const [peopleRes, interactionsRes] = await Promise.all([
-        supabase.from('people').select('id, relationship_type, strength_score, trust_score').eq('user_id', user.id).eq('is_archived', false),
-        supabase.from('interactions').select('id, interaction_date, type').eq('user_id', user.id)
+        supabase.from('people').select('id, relationship_type, strength_score, trust_score').eq('user_id', session.user.id).eq('is_archived', false),
+        supabase.from('interactions').select('id, interaction_date, type').eq('user_id', session.user.id)
       ])
 
       if (peopleRes.data) setPeople(peopleRes.data)
       if (interactionsRes.data) setInteractions(interactionsRes.data)
       
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching analytics data", error)
+      alert("Failed to load analytics: " + (error.message || "Unknown error"))
     } finally {
       setLoading(false)
     }
