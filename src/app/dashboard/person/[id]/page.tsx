@@ -147,8 +147,14 @@ export default function PersonProfilePage() {
       // Fetch All People (for linking)
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        const { data: allPeopleData } = await supabase.from('people').select('id, name, photo').eq('user_id', user.id).eq('is_archived', false)
-        setAllPeople(allPeopleData || [])
+        const { data: allPeopleData } = await supabase
+          .from('people')
+          .select('id, name, photo, is_archived')
+          .eq('user_id', user.id)
+        
+        // Filter out archived people explicitly in JS to handle NULL safely
+        const activePeople = (allPeopleData || []).filter(p => p.is_archived !== true)
+        setAllPeople(activePeople)
 
         // Fetch Connections
         const { data: connectionsData } = await supabase.from('connections').select('*').or(`person_a_id.eq.${personId},person_b_id.eq.${personId}`)
