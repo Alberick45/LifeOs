@@ -365,7 +365,7 @@ export default function SettingsPage() {
 
             <div className="space-y-2 mt-6">
               <label className="text-sm text-gray-400">Push Notifications</label>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                 {!isSubscribed && (
                   <Button 
                     onClick={handleSyncPush} 

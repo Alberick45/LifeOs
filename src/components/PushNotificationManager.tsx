@@ -82,7 +82,7 @@ export function PushNotificationManager() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 glass-panel p-4 rounded-xl flex flex-col gap-3 max-w-sm animate-in slide-in-from-bottom-5">
+    <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 z-50 glass-panel p-4 rounded-xl flex flex-col gap-3 sm:max-w-sm animate-in slide-in-from-bottom-5">
       <div className="flex items-start gap-3">
         <div className="p-2 bg-primary/20 rounded-full text-primary">
           <BellRing className="h-5 w-5" />
