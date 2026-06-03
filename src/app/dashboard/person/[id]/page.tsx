@@ -384,6 +384,17 @@ export default function PersonProfilePage() {
     }
   }
 
+  // Format phone for WhatsApp (wa.me requires country code, no +)
+  const formatWhatsAppNumber = (phone: string) => {
+    let cleaned = phone.replace(/[^0-9+]/g, '')
+    // Default to +233 (Ghana) if it's a local 10-digit number starting with 0
+    if (cleaned.startsWith('0') && cleaned.length === 10) {
+      cleaned = '233' + cleaned.substring(1)
+    }
+    // Remove the + for the URL
+    return cleaned.replace('+', '')
+  }
+
   if (loading) return <div className="animate-pulse h-64 glass-panel rounded-xl" />
   if (!person) return <div>Person not found.</div>
 
@@ -458,7 +469,7 @@ export default function PersonProfilePage() {
                     <a href={`tel:${person.phone.replace(/[^0-9+]/g, '')}`} className="p-1 hover:bg-white/10 rounded-full transition-colors text-green-400" title="Call">
                       <Phone className="h-3 w-3" />
                     </a>
-                    <a href={`https://wa.me/${person.phone.replace(/[^0-9+]/g, '')}`} target="_blank" rel="noopener noreferrer" className="p-1 hover:bg-white/10 rounded-full transition-colors text-green-400" title="WhatsApp">
+                    <a href={`https://wa.me/${formatWhatsAppNumber(person.phone)}`} target="_blank" rel="noopener noreferrer" className="p-1 hover:bg-white/10 rounded-full transition-colors text-green-400" title="WhatsApp">
                       <MessageCircle className="h-3 w-3" />
                     </a>
                   </div>
