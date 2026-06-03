@@ -38,23 +38,28 @@ export function NotificationCenter() {
   }, [])
 
   const fetchNotifications = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const user = session?.user
+      if (!user) return
 
-    const { data, error } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(20)
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(20)
 
-    if (error) {
-      console.error("Error fetching notifications:", error)
-      return
+      if (error) {
+        console.error("Error fetching notifications:", error)
+        return
+      }
+
+      setNotifications(data || [])
+      setUnreadCount(data?.filter(n => !n.read).length || 0)
+    } catch (e) {
+      console.error("Failed to fetch notifications", e)
     }
-
-    setNotifications(data || [])
-    setUnreadCount(data?.filter(n => !n.read).length || 0)
   }
 
   const markAsRead = async (id: string) => {
@@ -75,14 +80,19 @@ export function NotificationCenter() {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })))
     setUnreadCount(0)
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const user = session?.user
+      if (!user) return
 
-    await supabase
-      .from('notifications')
-      .update({ read: true })
-      .eq('user_id', user.id)
-      .in('read', [false])
+      await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('user_id', user.id)
+        .in('read', [false])
+    } catch (e) {
+      console.error(e)
+    }
   }
 
   return (
