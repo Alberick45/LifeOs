@@ -1,6 +1,7 @@
 const CACHE_NAME = 'humanos-v1'
 
 self.addEventListener('install', (e) => {
+  self.skipWaiting()
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll([
@@ -10,6 +11,10 @@ self.addEventListener('install', (e) => {
       ])
     })
   )
+})
+
+self.addEventListener('activate', (e) => {
+  e.waitUntil(self.clients.claim())
 })
 
 self.addEventListener('fetch', (e) => {
