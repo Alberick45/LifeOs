@@ -4,9 +4,11 @@ import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Plus, User, Heart, ShieldAlert } from "lucide-react"
+import { Plus, User, Heart, ShieldAlert, Loader2 } from "lucide-react"
 import { motion } from "framer-motion"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
+import { Suspense } from "react"
 
 type Person = {
   id: string
@@ -17,9 +19,11 @@ type Person = {
   photo: string | null
 }
 
-export default function DashboardPage() {
+function DashboardContent() {
   const [people, setPeople] = useState<Person[]>([])
   const [loading, setLoading] = useState(true)
+  const searchParams = useSearchParams()
+  const q = searchParams.get('q')
 
   useEffect(() => {
     fetchPeople()
@@ -45,6 +49,12 @@ export default function DashboardPage() {
     }
   }
 
+  const filteredPeople = people.filter(p => {
+    if (!q) return true
+    const s = q.toLowerCase()
+    return (p.name?.toLowerCase() || "").includes(s) || (p.relationship_type?.toLowerCase() || "").includes(s)
+  })
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -65,22 +75,26 @@ export default function DashboardPage() {
             <div key={i} className="h-48 rounded-xl glass-panel animate-pulse bg-white/5" />
           ))}
         </div>
-      ) : people.length === 0 ? (
+      ) : filteredPeople.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 text-center glass-panel rounded-xl border-dashed border-2 border-white/10">
           <div className="h-16 w-16 rounded-full bg-white/5 flex items-center justify-center mb-4 text-gray-400">
             <User className="h-8 w-8" />
           </div>
-          <h3 className="text-xl font-medium mb-2">No people added yet</h3>
-          <p className="text-gray-400 mb-6 max-w-sm">Start building your relationship intelligence network by adding your first connection.</p>
-          <Link href="/dashboard/add">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" /> Add Your First Connection
-            </Button>
-          </Link>
+          <h3 className="text-xl font-medium mb-2">No people found</h3>
+          <p className="text-gray-400 mb-6 max-w-sm">
+            {q ? `No one matched your search for "${q}".` : "Start building your relationship intelligence network by adding your first connection."}
+          </p>
+          {!q && (
+            <Link href="/dashboard/add">
+              <Button>
+                <Plus className="mr-2 h-4 w-4" /> Add Your First Connection
+              </Button>
+            </Link>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {people.map((person, i) => (
+          {filteredPeople.map((person, i) => (
             <motion.div
               key={person.id}
               initial={{ opacity: 0, y: 20 }}
@@ -134,5 +148,13 @@ export default function DashboardPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}>
+      <DashboardContent />
+    </Suspense>
   )
 }

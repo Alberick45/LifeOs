@@ -17,6 +17,7 @@ export default function DashboardLayout({
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
 
   useEffect(() => {
     const checkUser = async () => {
@@ -49,6 +50,16 @@ export default function DashboardLayout({
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     router.push("/")
+  }
+
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    setSearchQuery(val)
+    if (val.trim()) {
+      router.push(`/dashboard?q=${encodeURIComponent(val)}`)
+    } else {
+      router.push(`/dashboard`)
+    }
   }
 
   if (loading) {
@@ -102,6 +113,8 @@ export default function DashboardLayout({
             <Search className="h-4 w-4 text-gray-400 mr-2" />
             <input 
               type="text" 
+              value={searchQuery}
+              onChange={handleSearch}
               placeholder="Search people..." 
               className="bg-transparent border-none outline-none text-sm w-full text-white placeholder:text-gray-500"
             />

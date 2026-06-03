@@ -80,7 +80,7 @@ export default function PersonProfilePage() {
 
   // AI Magic State
   const [isAiModalOpen, setIsAiModalOpen] = useState(false)
-  const [aiType, setAiType] = useState<'gift' | 'message' | 'poem' | 'website'>('gift')
+  const [aiType, setAiType] = useState<'gift' | 'message' | 'summary' | 'conflict' | 'poem' | 'website'>('gift')
   const [aiGenerating, setAiGenerating] = useState(false)
   const [aiResult, setAiResult] = useState<string | null>(null)
 
@@ -873,7 +873,7 @@ export default function PersonProfilePage() {
                   )}
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
-                    {(['gift', 'message', 'poem', 'website'] as const).map(type => (
+                    {(['gift', 'message', 'summary', 'conflict', 'poem', 'website'] as const).map(type => (
                       <button
                         key={type}
                         onClick={() => { setAiType(type); setAiResult(null) }}
