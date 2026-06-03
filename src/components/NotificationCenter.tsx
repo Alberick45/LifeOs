@@ -51,14 +51,13 @@ export function NotificationCenter() {
         .limit(20)
 
       if (error) {
-        console.error("Error fetching notifications:", error)
-        return
+        throw error;
       }
 
       setNotifications(data || [])
       setUnreadCount(data?.filter(n => !n.read).length || 0)
-    } catch (e) {
-      console.error("Failed to fetch notifications", e)
+    } catch (e: any) {
+      console.error("Failed to fetch notifications:", e.message || e)
     }
   }
 

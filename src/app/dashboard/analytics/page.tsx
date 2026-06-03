@@ -45,6 +45,9 @@ export default function AnalyticsPage() {
         supabase.from('interactions').select('id, interaction_date, type').eq('user_id', session.user.id)
       ])
 
+      if (peopleRes.error) throw peopleRes.error;
+      if (interactionsRes.error) throw interactionsRes.error;
+
       if (peopleRes.data) setPeople(peopleRes.data)
       if (interactionsRes.data) setInteractions(interactionsRes.data)
       
