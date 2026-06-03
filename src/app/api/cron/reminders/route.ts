@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import webpush from 'web-push';
 
 // Use the service role key to bypass RLS for background cron jobs
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -67,15 +68,63 @@ export async function GET(request: Request) {
       }
     }
 
-    // 4. Insert notifications into DB
+    // 4. Insert notifications into DB and trigger Web Push
     if (notificationsToInsert.length > 0) {
-      const { error: insertError } = await supabase
+      const { data: insertedNotifs, error: insertError } = await supabase
         .from('notifications')
-        .insert(notificationsToInsert);
+        .insert(notificationsToInsert)
+        .select();
       
       if (insertError) {
         console.error("Failed to insert notifications", insertError);
         throw insertError;
+      }
+
+      // Configure web-push
+      if (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+        webpush.setVapidDetails(
+          'mailto:support@humanos.app',
+          process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+          process.env.VAPID_PRIVATE_KEY
+        );
+
+        // Get all affected user_ids
+        const userIds = [...new Set(notificationsToInsert.map(n => n.user_id))];
+
+        // Fetch subscriptions for these users
+        const { data: subscriptions } = await supabase
+          .from('push_subscriptions')
+          .select('*')
+          .in('user_id', userIds);
+
+        if (subscriptions && subscriptions.length > 0) {
+          for (const sub of subscriptions) {
+            // Find the corresponding notification for this user
+            const notif = notificationsToInsert.find(n => n.user_id === sub.user_id);
+            if (!notif) continue;
+
+            const pushSubscription = {
+              endpoint: sub.endpoint,
+              keys: {
+                p256dh: sub.p256dh,
+                auth: sub.auth
+              }
+            };
+
+            const payload = JSON.stringify({
+              title: notif.title,
+              body: notif.message,
+              icon: '/globe.svg'
+            });
+
+            try {
+              await webpush.sendNotification(pushSubscription, payload);
+            } catch (err) {
+              console.error("Failed to send push notification to endpoint", sub.endpoint, err);
+              // Optional: cleanup invalid subscriptions here
+            }
+          }
+        }
       }
     }
 

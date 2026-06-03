@@ -6,6 +6,7 @@ import Link from "next/link"
 import { supabase } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { NotificationCenter } from "@/components/NotificationCenter"
+import { PushNotificationManager } from "@/components/PushNotificationManager"
 import { Sparkles, Users, Calendar, Settings, LogOut, Search } from "lucide-react"
 
 export default function DashboardLayout({
@@ -110,6 +111,7 @@ export default function DashboardLayout({
           </div>
         </div>
       </main>
+      <PushNotificationManager />
     </div>
   )
 }
