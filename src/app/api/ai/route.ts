@@ -7,7 +7,7 @@ const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || process.env.G
 
 export async function POST(req: Request) {
   try {
-    const { type, person, interactions } = await req.json()
+    const { type, person, interactions, tags } = await req.json()
 
     if (!process.env.GOOGLE_API_KEY && !process.env.GEMINI_API_KEY) {
       return NextResponse.json(
@@ -22,6 +22,9 @@ export async function POST(req: Request) {
     let contextStr = `This person's name is ${person.name}. They are my ${person.relationship_type}.`
     if (person.birthday) {
       contextStr += ` Their birthday is ${new Date(person.birthday).toLocaleDateString()}.`
+    }
+    if (tags && tags.length > 0) {
+      contextStr += ` Here are some specific details, traits, and interests about them: ${tags.map((t: any) => t.name).join(', ')}.`
     }
     if (interactions && interactions.length > 0) {
       contextStr += ` Here are some notes from our past interactions: ${interactions.map((i: any) => i.notes).filter(Boolean).join('. ')}.`

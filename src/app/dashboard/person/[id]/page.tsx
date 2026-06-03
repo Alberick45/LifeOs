@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Plus, MessageCircle, Heart, ShieldAlert, Phone, Coffee, Gift, MessageSquare, Edit, X, Calendar, Sparkles, Loader2, Copy } from "lucide-react"
+import { ArrowLeft, Plus, MessageCircle, Heart, ShieldAlert, Phone, Coffee, Gift, MessageSquare, Edit, X, Calendar, Sparkles, Loader2, Copy, Tag } from "lucide-react"
 import Link from "next/link"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
@@ -30,6 +30,11 @@ type Interaction = {
   interaction_date: string
 }
 
+type TagData = {
+  id: string
+  name: string
+}
+
 const TYPE_ICONS: Record<string, any> = {
   call: Phone,
   meet: Coffee,
@@ -50,6 +55,7 @@ export default function PersonProfilePage() {
 
   const [person, setPerson] = useState<Person | null>(null)
   const [interactions, setInteractions] = useState<Interaction[]>([])
+  const [tags, setTags] = useState<TagData[]>([])
   const [loading, setLoading] = useState(true)
 
   // Form State
@@ -77,6 +83,10 @@ export default function PersonProfilePage() {
   const [aiType, setAiType] = useState<'gift' | 'message' | 'poem' | 'website'>('gift')
   const [aiGenerating, setAiGenerating] = useState(false)
   const [aiResult, setAiResult] = useState<string | null>(null)
+
+  // Tag State
+  const [newTag, setNewTag] = useState("")
+  const [addingTag, setAddingTag] = useState(false)
 
   useEffect(() => {
     fetchData()
@@ -114,6 +124,17 @@ export default function PersonProfilePage() {
 
       if (iError) throw iError
       setInteractions(iData || [])
+
+      // Fetch Tags
+      const { data: tData, error: tError } = await supabase
+        .from('person_tags')
+        .select('tags(id, name)')
+        .eq('person_id', personId)
+
+      if (tError) throw tError
+      
+      const mappedTags = (tData || []).map((t: any) => t.tags).filter(Boolean) as TagData[]
+      setTags(mappedTags)
 
     } catch (error) {
       console.error("Error fetching data:", error)
@@ -282,7 +303,7 @@ export default function PersonProfilePage() {
       const res = await fetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: aiType, person, interactions })
+        body: JSON.stringify({ type: aiType, person, interactions, tags })
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to generate')
@@ -292,6 +313,74 @@ export default function PersonProfilePage() {
       alert(error.message)
     } finally {
       setAiGenerating(false)
+    }
+  }
+
+  const handleAddTag = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter' || !newTag.trim() || addingTag) return
+    
+    setAddingTag(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const tagName = newTag.trim().toLowerCase()
+
+      // 1. Check if tag exists
+      let { data: existingTag } = await supabase
+        .from('tags')
+        .select('id, name')
+        .eq('user_id', user.id)
+        .eq('name', tagName)
+        .single()
+
+      let tagId = existingTag?.id
+
+      // 2. Create if not exists
+      if (!existingTag) {
+        const { data: createdTag, error: createError } = await supabase
+          .from('tags')
+          .insert([{ user_id: user.id, name: tagName }])
+          .select()
+          .single()
+        
+        if (createError) throw createError
+        tagId = createdTag.id
+        existingTag = createdTag
+      }
+
+      // 3. Link to person
+      const { error: linkError } = await supabase
+        .from('person_tags')
+        .insert([{ person_id: personId, tag_id: tagId }])
+      
+      // Ignore conflict errors if they already have this tag
+      if (linkError && linkError.code !== '23505') throw linkError
+
+      // Update state
+      if (!tags.find(t => t.id === tagId)) {
+        setTags([...tags, { id: tagId, name: tagName }])
+      }
+      setNewTag("")
+    } catch (error) {
+      console.error("Error adding tag:", error)
+    } finally {
+      setAddingTag(false)
+    }
+  }
+
+  const handleRemoveTag = async (tagId: string) => {
+    try {
+      const { error } = await supabase
+        .from('person_tags')
+        .delete()
+        .eq('person_id', personId)
+        .eq('tag_id', tagId)
+
+      if (error) throw error
+      setTags(tags.filter(t => t.id !== tagId))
+    } catch (error) {
+      console.error("Error removing tag:", error)
     }
   }
 
@@ -377,6 +466,29 @@ export default function PersonProfilePage() {
             {person.address && (
               <div className="text-sm text-gray-400 mt-1">📍 {person.address}</div>
             )}
+            
+            {/* Tagging System */}
+            <div className="mt-4 flex items-center flex-wrap gap-2">
+              {tags.map(tag => (
+                <div key={tag.id} className="group flex items-center gap-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-3 py-1 text-xs text-gray-300 transition-colors">
+                  <span className="capitalize">{tag.name}</span>
+                  <button onClick={() => handleRemoveTag(tag.id)} className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-gray-500 hover:text-white">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+              <div className="relative">
+                <input 
+                  type="text"
+                  placeholder={addingTag ? "Adding..." : "+ Add detail (Likes, Hobbies)"}
+                  value={newTag}
+                  onChange={e => setNewTag(e.target.value)}
+                  onKeyDown={handleAddTag}
+                  disabled={addingTag}
+                  className="bg-transparent border border-white/10 border-dashed rounded-full px-3 py-1 text-xs text-gray-400 focus:text-white focus:outline-none focus:border-white/30 w-48 transition-all"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
