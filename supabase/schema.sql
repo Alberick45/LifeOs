@@ -204,3 +204,47 @@ CREATE TABLE IF NOT EXISTS verified_links (
 ALTER TABLE verified_links ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can view their own verified links" ON verified_links FOR SELECT USING (auth.uid() = user_a OR auth.uid() = user_b);
 CREATE POLICY "System can manage verified links" ON verified_links FOR ALL USING (auth.uid() = user_a OR auth.uid() = user_b);
+
+-- ─── PLAYLAB PROGRESS (Cross-device game sync) ──────────────────────────────────
+-- Stores all PlayLab game state per user so it persists across devices/browsers.
+CREATE TABLE IF NOT EXISTS playlab_progress (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE,
+
+    -- Shared coin wallet (used across all PlayLab games)
+    coins INT DEFAULT 100,
+
+    -- Wordchemy specific
+    wordchemy_discovered JSONB DEFAULT '["fire","water","earth","air"]'::jsonb,
+    wordchemy_unlocked_packs JSONB DEFAULT '["core"]'::jsonb,
+
+    -- Per-game high scores (jsonb map of game -> score)
+    high_scores JSONB DEFAULT '{}'::jsonb,
+
+    -- Reverse Hangman unlocked environments
+    rh_unlocked_envs JSONB DEFAULT '["volcano","submarine"]'::jsonb,
+
+    -- Chaos Alphabet / Memory Hunter high scores stored inside high_scores above
+
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE playlab_progress ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can view their own playlab progress" ON playlab_progress FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert their own playlab progress" ON playlab_progress FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update their own playlab progress" ON playlab_progress FOR UPDATE USING (auth.uid() = user_id);
+
+-- Auto-update updated_at on any row change
+CREATE OR REPLACE FUNCTION update_playlab_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_playlab_updated_at ON playlab_progress;
+CREATE TRIGGER trg_playlab_updated_at
+  BEFORE UPDATE ON playlab_progress
+  FOR EACH ROW EXECUTE FUNCTION update_playlab_updated_at();
+

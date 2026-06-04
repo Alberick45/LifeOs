@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { Sparkles, Timer, Trophy, ArrowLeft, RefreshCw, Flame, Droplets, Mountain, Wind, Database, Users, Plus, LogIn, Crown, LogOut, BookOpen, Layers, Check, Copy, Send, Trash2, Zap, ShieldAlert, ShoppingBag } from "lucide-react"
+import { readCoins, adjustCoins, onCoinsChange, loadProgress, saveProgress } from "@/lib/playlab-coins"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase/client"
@@ -263,13 +264,14 @@ export default function WordchemyPage() {
   const channelRef = useRef<any>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Load auth username, local save files, and pack unlocks
+  // Load auth, sync progress from Supabase + localStorage, subscribe to cross-tab coin changes
   useEffect(() => {
-    const fetchUser = async () => {
+    let resolvedUserId: string | null = null
+
+    const init = async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      let currentUserId = null
       if (session?.user) {
-        currentUserId = session.user.id
+        resolvedUserId = session.user.id
         setUserId(session.user.id)
         if (session.user.user_metadata?.full_name) {
           setUsername(session.user.user_metadata.full_name)
@@ -278,46 +280,19 @@ export default function WordchemyPage() {
         }
       }
 
-      if (typeof window !== "undefined") {
-        const coinKey = currentUserId ? `playlab_coins_${currentUserId}` : "playlab_coins_local"
-        const savedCoins = localStorage.getItem(coinKey)
-        if (savedCoins) {
-          setCoins(parseInt(savedCoins) || 0)
-        } else {
-          setCoins(100)
-          localStorage.setItem(coinKey, "100")
-        }
-      }
+      // Load merged progress (Supabase wins, merged with localStorage)
+      const progress = await loadProgress(resolvedUserId)
+      setCoins(progress.coins)
+      setDiscovered(progress.wordchemy_discovered)
+      setUnlockedPacks(progress.wordchemy_unlocked_packs)
     }
-    fetchUser()
+    init()
 
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("wordchemy_discovered")
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved)
-          if (Array.isArray(parsed) && parsed.length >= 4) {
-            setDiscovered(parsed)
-          }
-        } catch (e) {
-          console.error("Failed to load local recipe data:", e)
-        }
-      }
-
-      const savedPacks = localStorage.getItem("wordchemy_packs")
-      if (savedPacks) {
-        try {
-          const parsed = JSON.parse(savedPacks)
-          if (Array.isArray(parsed)) {
-            setUnlockedPacks(parsed)
-          }
-        } catch (e) {
-          console.error("Failed to load pack save states:", e)
-        }
-      }
-    }
+    // Cross-tab coin sync
+    const unsubCoins = onCoinsChange(resolvedUserId, (newBal) => setCoins(newBal))
 
     return () => {
+      unsubCoins()
       if (channelRef.current) {
         channelRef.current.unsubscribe()
       }
@@ -350,16 +325,16 @@ export default function WordchemyPage() {
     timerRef.current = setTimeout(() => setAlertMsg(null), 3000)
   }
 
-  // Save discovered array to localstorage
+  // Save discovered array (localStorage + debounced Supabase)
   const saveOfflineDiscovered = (list: string[]) => {
     setDiscovered(list)
-    localStorage.setItem("wordchemy_discovered", JSON.stringify(list))
+    saveProgress(userId, { wordchemy_discovered: list })
   }
 
-  // Save unlocked packs to localstorage
+  // Save unlocked packs (localStorage + debounced Supabase)
   const saveOfflinePacks = (list: string[]) => {
     setUnlockedPacks(list)
-    localStorage.setItem("wordchemy_packs", JSON.stringify(list))
+    saveProgress(userId, { wordchemy_unlocked_packs: list })
   }
 
   // Buy pack logic
@@ -370,16 +345,12 @@ export default function WordchemyPage() {
     }
 
     if (useCoins) {
-      const coinKey = userId ? `playlab_coins_${userId}` : "playlab_coins_local"
       if (coins < costCoins) {
         triggerAlert("Insufficient coins!", false)
         return
       }
-      setCoins(prev => {
-        const next = prev - costCoins
-        localStorage.setItem(coinKey, next.toString())
-        return next
-      })
+      const next = adjustCoins(userId, -costCoins)
+      setCoins(next)
     } else {
       if (discovered.length < costElements) {
         triggerAlert(`Need at least ${costElements} elements discovered!`, false)
@@ -390,18 +361,20 @@ export default function WordchemyPage() {
     const newList = [...unlockedPacks, packKey]
     saveOfflinePacks(newList)
 
-    // Immediately push pack starting elements
-    let startingEl = ""
-    if (packKey === "scifi") startingEl = "alien"
-    else if (packKey === "fantasy") startingEl = "magic"
-    else if (packKey === "relationships") startingEl = "datingapp"
-
-    if (startingEl && !discovered.includes(startingEl)) {
-      const updatedDiscovered = [...discovered, startingEl]
-      saveOfflineDiscovered(updatedDiscovered)
+    // Inject ALL elements from the purchased pack into discovered immediately
+    const packElements = Object.values(ELEMENTS)
+      .filter(el => el.pack === packKey)
+      .map(el => el.id)
+    
+    const updatedDiscovered = [...discovered]
+    for (const elId of packElements) {
+      if (!updatedDiscovered.includes(elId)) {
+        updatedDiscovered.push(elId)
+      }
     }
+    saveOfflineDiscovered(updatedDiscovered)
 
-    triggerAlert(`Successfully unlocked the ${packKey.toUpperCase()} expansion pack!`, true)
+    triggerAlert(`🎉 Unlocked ${packElements.length} new elements from the ${packKey.toUpperCase()} pack!`, true)
   }
 
   // Element combination logic
