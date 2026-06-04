@@ -42,12 +42,12 @@ export default function PlayLabPage() {
       id: "reverse-hangman",
       title: "Reverse Hangman Survival",
       description: "Word puzzle + escalating environmental danger. Decode together or shape the disaster.",
-      icon: <Lock className="h-8 w-8 text-gray-500" />,
+      icon: <Zap className="h-8 w-8 text-red-400 animate-pulse" />,
       type: "Hybrid",
-      color: "from-gray-800/40 to-gray-900/40",
-      borderColor: "border-white/5",
-      href: "#",
-      locked: true
+      color: "from-red-950/40 to-red-900/20",
+      borderColor: "border-red-500/30",
+      href: "/dashboard/playlab/reverse-hangman",
+      locked: false
     },
     {
       id: "country-war",
