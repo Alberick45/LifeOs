@@ -1,12 +1,12 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Sparkles, Timer, Trophy, ArrowLeft, RefreshCw, Flame, Droplets, Mountain, Wind, Database, Users, Plus, LogIn, Crown, LogOut, BookOpen, Layers, Check, Copy, Send, Trash2, Zap } from "lucide-react"
+import { Sparkles, Timer, Trophy, ArrowLeft, RefreshCw, Flame, Droplets, Mountain, Wind, Database, Users, Plus, LogIn, Crown, LogOut, BookOpen, Layers, Check, Copy, Send, Trash2, Zap, ShieldAlert, ShoppingBag } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase/client"
 
-type GameState = "MENU" | "SOLO_PLAY" | "LORE_BOOK" | "QUESTS" | "MULTIPLAYER_SETUP" | "MULTIPLAYER_LOBBY" | "PLAYING_COOP" | "PLAYING_RACE" | "RESULTS"
+type GameState = "MENU" | "SOLO_PLAY" | "LORE_BOOK" | "QUESTS" | "MARKETPLACE" | "MULTIPLAYER_SETUP" | "MULTIPLAYER_LOBBY" | "PLAYING_COOP" | "PLAYING_RACE" | "RESULTS"
 type ElementTier = "Base" | "Natural" | "Technical" | "Social"
 
 interface ElementItem {
@@ -16,83 +16,107 @@ interface ElementItem {
   description: string
   tier: ElementTier
   color: string // Tailwind style classes for border/glow
+  pack: "core" | "scifi" | "fantasy" | "relationships"
 }
 
 // Database of elements
 const ELEMENTS: Record<string, ElementItem> = {
   // Base Elements
-  fire: { id: "fire", name: "Fire", emoji: "🔥", description: "Hot, destructive, and bright.", tier: "Base", color: "border-orange-500/50 shadow-orange-500/20 text-orange-400 bg-orange-950/20" },
-  water: { id: "water", name: "Water", emoji: "💧", description: "Fluid, life-giving, and cool.", tier: "Base", color: "border-cyan-500/50 shadow-cyan-500/20 text-cyan-400 bg-cyan-950/20" },
-  earth: { id: "earth", name: "Earth", emoji: "🌍", description: "Solid, stable, and fertile.", tier: "Base", color: "border-emerald-500/50 shadow-emerald-500/20 text-emerald-400 bg-emerald-950/20" },
-  air: { id: "air", name: "Air", emoji: "💨", description: "Invisible, light, and always in motion.", tier: "Base", color: "border-sky-500/50 shadow-sky-500/20 text-sky-400 bg-sky-950/20" },
+  fire: { id: "fire", name: "Fire", emoji: "🔥", description: "Hot, destructive, and bright.", tier: "Base", color: "border-orange-500/50 shadow-orange-500/20 text-orange-400 bg-orange-950/20", pack: "core" },
+  water: { id: "water", name: "Water", emoji: "💧", description: "Fluid, life-giving, and cool.", tier: "Base", color: "border-cyan-500/50 shadow-cyan-500/20 text-cyan-400 bg-cyan-950/20", pack: "core" },
+  earth: { id: "earth", name: "Earth", emoji: "🌍", description: "Solid, stable, and fertile.", tier: "Base", color: "border-emerald-500/50 shadow-emerald-500/20 text-emerald-400 bg-emerald-950/20", pack: "core" },
+  air: { id: "air", name: "Air", emoji: "💨", description: "Invisible, light, and always in motion.", tier: "Base", color: "border-sky-500/50 shadow-sky-500/20 text-sky-400 bg-sky-950/20", pack: "core" },
 
   // Natural Elements
-  steam: { id: "steam", name: "Steam", emoji: "💨", description: "Hot water vapor from boiling heat.", tier: "Natural", color: "border-slate-400/50 shadow-slate-400/20 text-slate-300 bg-slate-900/20" },
-  lava: { id: "lava", name: "Lava", emoji: "🌋", description: "Molten rock flowing straight from Earth's mantle.", tier: "Natural", color: "border-red-600/50 shadow-red-600/20 text-red-500 bg-red-950/20" },
-  mud: { id: "mud", name: "Mud", emoji: "💩", description: "A squishy mixture of wet earth.", tier: "Natural", color: "border-amber-700/50 shadow-amber-700/20 text-amber-600 bg-amber-950/20" },
-  energy: { id: "energy", name: "Energy", emoji: "⚡", description: "The spark of motion, power, and change.", tier: "Natural", color: "border-yellow-400/50 shadow-yellow-400/20 text-yellow-400 bg-yellow-950/20" },
-  rain: { id: "rain", name: "Rain", emoji: "🌧️", description: "Water droplets falling from condensed skies.", tier: "Natural", color: "border-blue-400/50 shadow-blue-400/20 text-blue-400 bg-blue-950/20" },
-  dust: { id: "dust", name: "Dust", emoji: "🌫️", description: "Fine particles carried away by currents.", tier: "Natural", color: "border-zinc-500/50 shadow-zinc-500/20 text-zinc-400 bg-zinc-900/20" },
-  pressure: { id: "pressure", name: "Pressure", emoji: "💥", description: "Crushing physical force from extreme weight.", tier: "Natural", color: "border-purple-500/50 shadow-purple-500/20 text-purple-400 bg-purple-950/20" },
-  sea: { id: "sea", name: "Sea", emoji: "🌊", description: "A vast expanse of salty water.", tier: "Natural", color: "border-teal-500/50 shadow-teal-500/20 text-teal-400 bg-teal-950/20" },
-  heat: { id: "heat", name: "Heat", emoji: "🥵", description: "High thermal energy and warm atmospheres.", tier: "Natural", color: "border-orange-600/50 shadow-orange-600/20 text-orange-500 bg-orange-950/20" },
-  sky: { id: "sky", name: "Sky", emoji: "🌌", description: "The endless expanse above our heads.", tier: "Natural", color: "border-indigo-400/50 shadow-indigo-400/20 text-indigo-400 bg-indigo-950/20" },
-  obsidian: { id: "obsidian", name: "Obsidian", emoji: "💎", description: "Volcanic glass formed by cooling lava.", tier: "Natural", color: "border-violet-800/50 shadow-violet-800/20 text-violet-500 bg-violet-950/20" },
-  plant: { id: "plant", name: "Plant", emoji: "🌱", description: "A green living organism photosynthesizing.", tier: "Natural", color: "border-green-400/50 shadow-green-400/20 text-green-400 bg-green-950/20" },
-  swamp: { id: "swamp", name: "Swamp", emoji: "🐊", description: "A wet, muddy place overrun by vegetation.", tier: "Natural", color: "border-emerald-700/50 shadow-emerald-700/20 text-emerald-600 bg-emerald-950/20" },
-  life: { id: "life", name: "Life", emoji: "🧬", description: "The mysterious force that grows and replicates.", tier: "Natural", color: "border-rose-400/50 shadow-rose-400/20 text-rose-400 bg-rose-950/20" },
-  clay: { id: "clay", name: "Clay", emoji: "🧱", description: "Sculptable natural earth compound.", tier: "Natural", color: "border-orange-700/50 shadow-orange-700/20 text-orange-600 bg-orange-950/20" },
-  bacteria: { id: "bacteria", name: "Bacteria", emoji: "🦠", description: "Microscopic single-celled life forms.", tier: "Natural", color: "border-lime-500/50 shadow-lime-500/20 text-lime-400 bg-lime-950/20" },
-  coal: { id: "coal", name: "Coal", emoji: "🪵", description: "Carbon-rich fuel formed from prehistoric plants.", tier: "Natural", color: "border-zinc-700/50 shadow-zinc-700/20 text-zinc-500 bg-zinc-950/20" },
-  diamond: { id: "diamond", name: "Diamond", emoji: "💎", description: "Carbon atoms arranged in a super-strong lattice.", tier: "Natural", color: "border-cyan-300/50 shadow-cyan-300/20 text-cyan-300 bg-cyan-950/20" },
-  animal: { id: "animal", name: "Animal", emoji: "🐾", description: "Multicellular creatures roaming the earth.", tier: "Natural", color: "border-amber-500/50 shadow-amber-500/20 text-amber-500 bg-amber-950/20" },
-  tree: { id: "tree", name: "Tree", emoji: "🌳", description: "A giant woody perennial plant.", tier: "Natural", color: "border-green-600/50 shadow-green-600/20 text-green-500 bg-green-950/20" },
-  rainbow: { id: "rainbow", name: "Rainbow", emoji: "🌈", description: "An arch of colors caused by rain dispersion.", tier: "Natural", color: "border-pink-500/50 shadow-pink-500/20 text-pink-400 bg-pink-950/20" },
-  stone: { id: "stone", name: "Stone", emoji: "🪨", description: "Solid, dense rock debris.", tier: "Natural", color: "border-slate-500/50 shadow-slate-500/20 text-slate-400 bg-slate-900/20" },
-  sand: { id: "sand", name: "Sand", emoji: "⏳", description: "Granular material formed by stone erosion.", tier: "Natural", color: "border-yellow-600/50 shadow-yellow-600/20 text-yellow-500 bg-yellow-950/20" },
-  moon: { id: "moon", name: "Moon", emoji: "🌕", description: "Earth's natural astronomical satellite.", tier: "Natural", color: "border-yellow-200/50 shadow-yellow-200/20 text-yellow-200 bg-yellow-950/10" },
+  steam: { id: "steam", name: "Steam", emoji: "💨", description: "Hot water vapor from boiling heat.", tier: "Natural", color: "border-slate-400/50 shadow-slate-400/20 text-slate-300 bg-slate-900/20", pack: "core" },
+  lava: { id: "lava", name: "Lava", emoji: "🌋", description: "Molten rock flowing straight from Earth's mantle.", tier: "Natural", color: "border-red-600/50 shadow-red-600/20 text-red-500 bg-red-950/20", pack: "core" },
+  mud: { id: "mud", name: "Mud", emoji: "💩", description: "A squishy mixture of wet earth.", tier: "Natural", color: "border-amber-700/50 shadow-amber-700/20 text-amber-600 bg-amber-950/20", pack: "core" },
+  energy: { id: "energy", name: "Energy", emoji: "⚡", description: "The spark of motion, power, and change.", tier: "Natural", color: "border-yellow-400/50 shadow-yellow-400/20 text-yellow-400 bg-yellow-950/20", pack: "core" },
+  rain: { id: "rain", name: "Rain", emoji: "🌧️", description: "Water droplets falling from condensed skies.", tier: "Natural", color: "border-blue-400/50 shadow-blue-400/20 text-blue-400 bg-blue-950/20", pack: "core" },
+  dust: { id: "dust", name: "Dust", emoji: "🌫️", description: "Fine particles carried away by currents.", tier: "Natural", color: "border-zinc-500/50 shadow-zinc-500/20 text-zinc-400 bg-zinc-900/20", pack: "core" },
+  pressure: { id: "pressure", name: "Pressure", emoji: "💥", description: "Crushing physical force from extreme weight.", tier: "Natural", color: "border-purple-500/50 shadow-purple-500/20 text-purple-400 bg-purple-950/20", pack: "core" },
+  sea: { id: "sea", name: "Sea", emoji: "🌊", description: "A vast expanse of salty water.", tier: "Natural", color: "border-teal-500/50 shadow-teal-500/20 text-teal-400 bg-teal-950/20", pack: "core" },
+  heat: { id: "heat", name: "Heat", emoji: "🥵", description: "High thermal energy and warm atmospheres.", tier: "Natural", color: "border-orange-600/50 shadow-orange-600/20 text-orange-500 bg-orange-950/20", pack: "core" },
+  sky: { id: "sky", name: "Sky", emoji: "🌌", description: "The endless expanse above our heads.", tier: "Natural", color: "border-indigo-400/50 shadow-indigo-400/20 text-indigo-400 bg-indigo-950/20", pack: "core" },
+  obsidian: { id: "obsidian", name: "Obsidian", emoji: "💎", description: "Volcanic glass formed by cooling lava.", tier: "Natural", color: "border-violet-800/50 shadow-violet-800/20 text-violet-500 bg-violet-950/20", pack: "core" },
+  plant: { id: "plant", name: "Plant", emoji: "🌱", description: "A green living organism photosynthesizing.", tier: "Natural", color: "border-green-400/50 shadow-green-400/20 text-green-400 bg-green-950/20", pack: "core" },
+  swamp: { id: "swamp", name: "Swamp", emoji: "🐊", description: "A wet, muddy place overrun by vegetation.", tier: "Natural", color: "border-emerald-700/50 shadow-emerald-700/20 text-emerald-600 bg-emerald-950/20", pack: "core" },
+  life: { id: "life", name: "Life", emoji: "🧬", description: "The mysterious force that grows and replicates.", tier: "Natural", color: "border-rose-400/50 shadow-rose-400/20 text-rose-400 bg-rose-950/20", pack: "core" },
+  clay: { id: "clay", name: "Clay", emoji: "🧱", description: "Sculptable natural earth compound.", tier: "Natural", color: "border-orange-700/50 shadow-orange-700/20 text-orange-600 bg-orange-950/20", pack: "core" },
+  bacteria: { id: "bacteria", name: "Bacteria", emoji: "🦠", description: "Microscopic single-celled life forms.", tier: "Natural", color: "border-lime-500/50 shadow-lime-500/20 text-lime-400 bg-lime-950/20", pack: "core" },
+  coal: { id: "coal", name: "Coal", emoji: "🪵", description: "Carbon-rich fuel formed from prehistoric plants.", tier: "Natural", color: "border-zinc-700/50 shadow-zinc-700/20 text-zinc-500 bg-zinc-950/20", pack: "core" },
+  diamond: { id: "diamond", name: "Diamond", emoji: "💎", description: "Carbon atoms arranged in a super-strong lattice.", tier: "Natural", color: "border-cyan-300/50 shadow-cyan-300/20 text-cyan-300 bg-cyan-950/20", pack: "core" },
+  animal: { id: "animal", name: "Animal", emoji: "🐾", description: "Multicellular creatures roaming the earth.", tier: "Natural", color: "border-amber-500/50 shadow-amber-500/20 text-amber-500 bg-amber-950/20", pack: "core" },
+  tree: { id: "tree", name: "Tree", emoji: "🌳", description: "A giant woody perennial plant.", tier: "Natural", color: "border-green-600/50 shadow-green-600/20 text-green-500 bg-green-950/20", pack: "core" },
+  rainbow: { id: "rainbow", name: "Rainbow", emoji: "🌈", description: "An arch of colors caused by rain dispersion.", tier: "Natural", color: "border-pink-500/50 shadow-pink-500/20 text-pink-400 bg-pink-950/20", pack: "core" },
+  stone: { id: "stone", name: "Stone", emoji: "🪨", description: "Solid, dense rock debris.", tier: "Natural", color: "border-slate-500/50 shadow-slate-500/20 text-slate-400 bg-slate-900/20", pack: "core" },
+  sand: { id: "sand", name: "Sand", emoji: "⏳", description: "Granular material formed by stone erosion.", tier: "Natural", color: "border-yellow-600/50 shadow-yellow-600/20 text-yellow-500 bg-yellow-950/20", pack: "core" },
+  moon: { id: "moon", name: "Moon", emoji: "🌕", description: "Earth's natural astronomical satellite.", tier: "Natural", color: "border-yellow-200/50 shadow-yellow-200/20 text-yellow-200 bg-yellow-950/10", pack: "core" },
 
   // Technical Elements
-  engine: { id: "engine", name: "Engine", emoji: "⚙️", description: "A machine that converts steam power into motion.", tier: "Technical", color: "border-blue-600/50 shadow-blue-600/20 text-blue-500 bg-blue-950/20" },
-  electricity: { id: "electricity", name: "Electricity", emoji: "⚡", description: "Power generated by flows of charge.", tier: "Technical", color: "border-yellow-300/50 shadow-yellow-300/20 text-yellow-300 bg-yellow-950/20" },
-  microchip: { id: "microchip", name: "Microchip", emoji: "🎛️", description: "A tiny slice of silicon controlling logic.", tier: "Technical", color: "border-cyan-400/50 shadow-cyan-400/20 text-cyan-400 bg-cyan-950/20" },
-  tool: { id: "tool", name: "Tool", emoji: "🛠️", description: "An instrument utilized to shape materials.", tier: "Technical", color: "border-stone-400/50 shadow-stone-400/20 text-stone-300 bg-stone-900/20" },
-  computer: { id: "computer", name: "Computer", emoji: "💻", description: "A silicon logic box executing recipes.", tier: "Technical", color: "border-teal-400/50 shadow-teal-400/20 text-teal-400 bg-teal-950/20" },
-  machine: { id: "machine", name: "Machine", emoji: "🚜", description: "Mechanical devices amplifying force.", tier: "Technical", color: "border-violet-600/50 shadow-violet-600/20 text-violet-400 bg-violet-950/20" },
-  robot: { id: "robot", name: "Robot", emoji: "🤖", description: "A machine guided by silicon instructions.", tier: "Technical", color: "border-indigo-500/50 shadow-indigo-500/20 text-indigo-400 bg-indigo-950/20" },
-  spaceexplorer: { id: "spaceexplorer", name: "Space Explorer", emoji: "🚀", description: "Vessel venturing into the final frontier.", tier: "Technical", color: "border-purple-400/50 shadow-purple-400/20 text-purple-300 bg-purple-950/20" },
-  engineer: { id: "engineer", name: "Engineer", emoji: "👷", description: "A designer of engines and systems.", tier: "Technical", color: "border-yellow-600/50 shadow-yellow-600/20 text-yellow-500 bg-yellow-950/20" },
+  engine: { id: "engine", name: "Engine", emoji: "⚙️", description: "A machine that converts steam power into motion.", tier: "Technical", color: "border-blue-600/50 shadow-blue-600/20 text-blue-500 bg-blue-950/20", pack: "core" },
+  electricity: { id: "electricity", name: "Electricity", emoji: "⚡", description: "Power generated by flows of charge.", tier: "Technical", color: "border-yellow-300/50 shadow-yellow-300/20 text-yellow-300 bg-yellow-950/20", pack: "core" },
+  microchip: { id: "microchip", name: "Microchip", emoji: "🎛️", description: "A tiny slice of silicon controlling logic.", tier: "Technical", color: "border-cyan-400/50 shadow-cyan-400/20 text-cyan-400 bg-cyan-950/20", pack: "core" },
+  tool: { id: "tool", name: "Tool", emoji: "🛠️", description: "An instrument utilized to shape materials.", tier: "Technical", color: "border-stone-400/50 shadow-stone-400/20 text-stone-300 bg-stone-900/20", pack: "core" },
+  computer: { id: "computer", name: "Computer", emoji: "💻", description: "A silicon logic box executing recipes.", tier: "Technical", color: "border-teal-400/50 shadow-teal-400/20 text-teal-400 bg-teal-950/20", pack: "core" },
+  machine: { id: "machine", name: "Machine", emoji: "🚜", description: "Mechanical devices amplifying force.", tier: "Technical", color: "border-violet-600/50 shadow-violet-600/20 text-violet-400 bg-violet-950/20", pack: "core" },
+  robot: { id: "robot", name: "Robot", emoji: "🤖", description: "A machine guided by silicon instructions.", tier: "Technical", color: "border-indigo-500/50 shadow-indigo-500/20 text-indigo-400 bg-indigo-950/20", pack: "core" },
+  spaceexplorer: { id: "spaceexplorer", name: "Space Explorer", emoji: "🚀", description: "Vessel venturing into the final frontier.", tier: "Technical", color: "border-purple-400/50 shadow-purple-400/20 text-purple-300 bg-purple-950/20", pack: "core" },
+  engineer: { id: "engineer", name: "Engineer", emoji: "👷", description: "A designer of engines and systems.", tier: "Technical", color: "border-yellow-600/50 shadow-yellow-600/20 text-yellow-500 bg-yellow-950/20", pack: "core" },
 
   // Social / Concepts Elements
-  human: { id: "human", name: "Human", emoji: "👤", description: "A complex social creature of mud and life.", tier: "Social", color: "border-orange-300/50 shadow-orange-300/20 text-orange-300 bg-orange-950/20" },
-  love: { id: "love", name: "Love", emoji: "❤️", description: "The profound emotional bond of humanity.", tier: "Social", color: "border-red-400/50 shadow-red-400/20 text-red-400 bg-red-950/20" },
-  family: { id: "family", name: "Family", emoji: "👨‍👩‍👧‍👦", description: "A supportive group of connected humans.", tier: "Social", color: "border-emerald-400/50 shadow-emerald-400/20 text-emerald-400 bg-emerald-950/20" },
-  friendship: { id: "friendship", name: "Friendship", emoji: "🤝", description: "A voluntary bond of trust and connection.", tier: "Social", color: "border-teal-300/50 shadow-teal-300/20 text-teal-300 bg-teal-950/20" },
-  community: { id: "community", name: "Community", emoji: "🏘️", description: "A larger system of overlapping friends and family.", tier: "Social", color: "border-green-300/50 shadow-green-300/20 text-green-300 bg-green-950/20" },
-  passion: { id: "passion", name: "Passion", emoji: "🔥", description: "Love combined with fiery drive.", tier: "Social", color: "border-red-500/50 shadow-red-500/20 text-red-400 bg-red-950/20" },
-  cooking: { id: "cooking", name: "Cooking", emoji: "🍳", description: "Preparing nourishing meals using heat.", tier: "Social", color: "border-yellow-500/50 shadow-yellow-500/20 text-yellow-400 bg-yellow-950/20" },
-  soup: { id: "soup", name: "Soup", emoji: "🍲", description: "A hot, liquid food infusion.", tier: "Social", color: "border-amber-600/50 shadow-amber-600/20 text-amber-500 bg-amber-950/20" },
-  pet: { id: "pet", name: "Pet", emoji: "🐱", description: "A domesticated companion animal.", tier: "Social", color: "border-orange-400/50 shadow-orange-400/20 text-orange-400 bg-orange-950/20" },
-  bird: { id: "bird", name: "Bird", emoji: "🐦", description: "A winged creature taking to the sky.", tier: "Social", color: "border-sky-400/50 shadow-sky-400/20 text-sky-400 bg-sky-950/20" },
-  dragon: { id: "dragon", name: "Dragon", emoji: "🐉", description: "A mythical fire-breathing animal.", tier: "Social", color: "border-red-700/50 shadow-red-700/20 text-red-600 bg-red-950/20" },
-  charcoal: { id: "charcoal", name: "Charcoal", emoji: "🪵", description: "Burned carbonized remnants of wood.", tier: "Social", color: "border-zinc-800/50 shadow-zinc-800/20 text-zinc-500 bg-zinc-950/20" },
-  tea: { id: "tea", name: "Tea", emoji: "🍵", description: "Steeped leaf infusion bringing tranquility.", tier: "Social", color: "border-green-500/50 shadow-green-500/20 text-green-400 bg-green-950/20" },
-  gunpowder: { id: "gunpowder", name: "Gunpowder", emoji: "💣", description: "Explosive dust compound.", tier: "Social", color: "border-slate-700/50 shadow-slate-700/20 text-slate-500 bg-slate-900/20" },
-  paper: { id: "paper", name: "Paper", emoji: "📄", description: "Thin sheets derived from organic wood fibers.", tier: "Social", color: "border-gray-300/50 shadow-gray-300/20 text-gray-300 bg-gray-900/20" },
-  brick: { id: "brick", name: "Brick", emoji: "🧱", description: "Fired clay blocks for building.", tier: "Social", color: "border-red-800/50 shadow-red-800/20 text-red-700 bg-red-950/20" },
-  wall: { id: "wall", name: "Wall", emoji: "🧱", description: "A solid partition blocking movement.", tier: "Social", color: "border-zinc-600/50 shadow-zinc-600/20 text-zinc-400 bg-zinc-950/20" },
-  house: { id: "house", name: "House", emoji: "🏠", description: "A building constructed of brick walls.", tier: "Social", color: "border-amber-500/50 shadow-amber-500/20 text-amber-400 bg-amber-950/20" },
-  city: { id: "city", name: "City", emoji: "🏙️", description: "A massive cluster of human houses.", tier: "Social", color: "border-purple-600/50 shadow-purple-600/20 text-purple-400 bg-purple-950/20" },
-  internet: { id: "internet", name: "Internet", emoji: "🌐", description: "The global web of computers connecting humans.", tier: "Social", color: "border-indigo-400/50 shadow-indigo-400/20 text-indigo-400 bg-indigo-950/20" },
-  socialnetwork: { id: "socialnetwork", name: "Social Network", emoji: "👥", description: "Virtual communities built on internet links.", tier: "Social", color: "border-pink-400/50 shadow-pink-400/20 text-pink-400 bg-pink-950/20" },
-  smartcity: { id: "smartcity", name: "Smart City", emoji: "🌆", description: "A city completely connected by internet grids.", tier: "Social", color: "border-cyan-300/50 shadow-cyan-300/20 text-cyan-300 bg-cyan-950/20" },
-  horse: { id: "horse", name: "Horse", emoji: "🐎", description: "A majestic companion animal.", tier: "Social", color: "border-amber-800/50 shadow-amber-800/20 text-amber-700 bg-amber-950/20" },
-  infernostallion: { id: "infernostallion", name: "Inferno Stallion", emoji: "🦄", description: "A fire stallion of legends.", tier: "Social", color: "border-orange-500/70 shadow-orange-500/40 text-orange-400 bg-orange-950/25 animate-pulse" },
-  aicompanion: { id: "aicompanion", name: "AI Companion", emoji: "🤖❤️", description: "A digital companion designed with intelligence and care.", tier: "Social", color: "border-rose-500/70 shadow-rose-500/40 text-rose-400 bg-rose-950/25 animate-pulse" }
+  human: { id: "human", name: "Human", emoji: "👤", description: "A complex social creature of mud and life.", tier: "Social", color: "border-orange-300/50 shadow-orange-300/20 text-orange-300 bg-orange-950/20", pack: "core" },
+  love: { id: "love", name: "Love", emoji: "❤️", description: "The profound emotional bond of humanity.", tier: "Social", color: "border-red-400/50 shadow-red-400/20 text-red-400 bg-red-950/20", pack: "core" },
+  family: { id: "family", name: "Family", emoji: "👨‍👩‍👧‍👦", description: "A supportive group of connected humans.", tier: "Social", color: "border-emerald-400/50 shadow-emerald-400/20 text-emerald-400 bg-emerald-950/20", pack: "core" },
+  friendship: { id: "friendship", name: "Friendship", emoji: "🤝", description: "A voluntary bond of trust and connection.", tier: "Social", color: "border-teal-300/50 shadow-teal-300/20 text-teal-300 bg-teal-950/20", pack: "core" },
+  community: { id: "community", name: "Community", emoji: "🏘️", description: "A larger system of overlapping friends and family.", tier: "Social", color: "border-green-300/50 shadow-green-300/20 text-green-300 bg-green-950/20", pack: "core" },
+  passion: { id: "passion", name: "Passion", emoji: "🔥", description: "Love combined with fiery drive.", tier: "Social", color: "border-red-500/50 shadow-red-500/20 text-red-400 bg-red-950/20", pack: "core" },
+  cooking: { id: "cooking", name: "Cooking", emoji: "🍳", description: "Preparing nourishing meals using heat.", tier: "Social", color: "border-yellow-500/50 shadow-yellow-500/20 text-yellow-400 bg-yellow-950/20", pack: "core" },
+  soup: { id: "soup", name: "Soup", emoji: "🍲", description: "A hot, liquid food infusion.", tier: "Social", color: "border-amber-600/50 shadow-amber-600/20 text-amber-500 bg-amber-950/20", pack: "core" },
+  pet: { id: "pet", name: "Pet", emoji: "🐱", description: "A domesticated companion animal.", tier: "Social", color: "border-orange-400/50 shadow-orange-400/20 text-orange-400 bg-orange-950/20", pack: "core" },
+  bird: { id: "bird", name: "Bird", emoji: "🐦", description: "A winged creature taking to the sky.", tier: "Social", color: "border-sky-400/50 shadow-sky-400/20 text-sky-400 bg-sky-950/20", pack: "core" },
+  dragon: { id: "dragon", name: "Dragon", emoji: "🐉", description: "A mythical fire-breathing animal.", tier: "Social", color: "border-red-700/50 shadow-red-700/20 text-red-600 bg-red-950/20", pack: "core" },
+  charcoal: { id: "charcoal", name: "Charcoal", emoji: "🪵", description: "Burned carbonized remnants of wood.", tier: "Social", color: "border-zinc-800/50 shadow-zinc-800/20 text-zinc-500 bg-zinc-950/20", pack: "core" },
+  tea: { id: "tea", name: "Tea", emoji: "🍵", description: "Steeped leaf infusion bringing tranquility.", tier: "Social", color: "border-green-500/50 shadow-green-500/20 text-green-400 bg-green-950/20", pack: "core" },
+  gunpowder: { id: "gunpowder", name: "Gunpowder", emoji: "💣", description: "Explosive dust compound.", tier: "Social", color: "border-slate-700/50 shadow-slate-700/20 text-slate-500 bg-slate-900/20", pack: "core" },
+  paper: { id: "paper", name: "Paper", emoji: "📄", description: "Thin sheets derived from organic wood fibers.", tier: "Social", color: "border-gray-300/50 shadow-gray-300/20 text-gray-300 bg-gray-900/20", pack: "core" },
+  brick: { id: "brick", name: "Brick", emoji: "🧱", description: "Fired clay blocks for building.", tier: "Social", color: "border-red-800/50 shadow-red-800/20 text-red-700 bg-red-950/20", pack: "core" },
+  wall: { id: "wall", name: "Wall", emoji: "🧱", description: "A solid partition blocking movement.", tier: "Social", color: "border-zinc-600/50 shadow-zinc-600/20 text-zinc-400 bg-zinc-950/20", pack: "core" },
+  house: { id: "house", name: "House", emoji: "🏠", description: "A building constructed of brick walls.", tier: "Social", color: "border-amber-500/50 shadow-amber-500/20 text-amber-400 bg-amber-950/20", pack: "core" },
+  city: { id: "city", name: "City", emoji: "🏙️", description: "A massive cluster of human houses.", tier: "Social", color: "border-purple-600/50 shadow-purple-600/20 text-purple-400 bg-purple-950/20", pack: "core" },
+  internet: { id: "internet", name: "Internet", emoji: "🌐", description: "The global web of computers connecting humans.", tier: "Social", color: "border-indigo-400/50 shadow-indigo-400/20 text-indigo-400 bg-indigo-950/20", pack: "core" },
+  socialnetwork: { id: "socialnetwork", name: "Social Network", emoji: "👥", description: "Virtual communities built on internet links.", tier: "Social", color: "border-pink-400/50 shadow-pink-400/20 text-pink-400 bg-pink-950/20", pack: "core" },
+  smartcity: { id: "smartcity", name: "Smart City", emoji: "🌆", description: "A city completely connected by internet grids.", tier: "Social", color: "border-cyan-300/50 shadow-cyan-300/20 text-cyan-300 bg-cyan-950/20", pack: "core" },
+  horse: { id: "horse", name: "Horse", emoji: "🐎", description: "A majestic companion animal.", tier: "Social", color: "border-amber-800/50 shadow-amber-800/20 text-amber-700 bg-amber-950/20", pack: "core" },
+  infernostallion: { id: "infernostallion", name: "Inferno Stallion", emoji: "🦄", description: "A fire stallion of legends.", tier: "Social", color: "border-orange-500/70 shadow-orange-500/40 text-orange-400 bg-orange-950/25 animate-pulse", pack: "core" },
+  aicompanion: { id: "aicompanion", name: "AI Companion", emoji: "🤖❤️", description: "A digital companion designed with intelligence and care.", tier: "Social", color: "border-rose-500/70 shadow-rose-500/40 text-rose-400 bg-rose-950/25 animate-pulse", pack: "core" },
+
+  // Sci-Fi Expansion Elements
+  alien: { id: "alien", name: "Alien", emoji: "👽", description: "An extraterrestrial living being.", tier: "Natural", color: "border-lime-400/60 shadow-lime-400/20 text-lime-400 bg-lime-950/30", pack: "scifi" },
+  ufo: { id: "ufo", name: "UFO", emoji: "🛸", description: "An unidentified flying mechanical object.", tier: "Technical", color: "border-purple-400/60 shadow-purple-400/20 text-purple-400 bg-purple-950/30", pack: "scifi" },
+  starship: { id: "starship", name: "Starship", emoji: "🚀", description: "A machine designed for interstellar space travel.", tier: "Technical", color: "border-sky-300/60 shadow-sky-300/20 text-sky-300 bg-sky-950/30", pack: "scifi" },
+  laser: { id: "laser", name: "Laser", emoji: "🔫", description: "A highly concentrated beam of pure thermal energy.", tier: "Technical", color: "border-red-500/60 shadow-red-500/20 text-red-500 bg-red-950/30", pack: "scifi" },
+  blackhole: { id: "blackhole", name: "Black Hole", emoji: "🕳️", description: "An intense region of space under extreme pressure.", tier: "Natural", color: "border-violet-700/60 shadow-violet-700/20 text-violet-400 bg-violet-950/30", pack: "scifi" },
+  timemachine: { id: "timemachine", name: "Time Machine", emoji: "⏳🤖", description: "A theoretical device violating normal time flow rules.", tier: "Technical", color: "border-indigo-400/60 shadow-indigo-400/20 text-indigo-400 bg-indigo-950/30", pack: "scifi" },
+
+  // Fantasy Expansion Elements
+  magic: { id: "magic", name: "Magic", emoji: "✨", description: "The mystical force of the unknown.", tier: "Natural", color: "border-pink-400/60 shadow-pink-400/20 text-pink-400 bg-pink-950/30", pack: "fantasy" },
+  wizard: { id: "wizard", name: "Wizard", emoji: "🧙", description: "A human master of arcane spells and elements.", tier: "Social", color: "border-purple-500/60 shadow-purple-500/20 text-purple-400 bg-purple-950/30", pack: "fantasy" },
+  spell: { id: "spell", name: "Spell", emoji: "📜", description: "A recipe of magic scripted onto paper.", tier: "Social", color: "border-cyan-400/60 shadow-cyan-400/20 text-cyan-400 bg-cyan-950/30", pack: "fantasy" },
+  elixir: { id: "elixir", name: "Elixir", emoji: "🧪", description: "A liquid potion carrying magic properties.", tier: "Natural", color: "border-teal-400/60 shadow-teal-400/20 text-teal-400 bg-teal-950/30", pack: "fantasy" },
+  phoenix: { id: "phoenix", name: "Phoenix", emoji: "🐦🔥", description: "A magical bird returning from ashes via fire.", tier: "Natural", color: "border-orange-500/60 shadow-orange-500/20 text-orange-400 bg-orange-950/30", pack: "fantasy" },
+  castle: { id: "castle", name: "Castle", emoji: "🏰", description: "A secure stone fortress built for royalty.", tier: "Social", color: "border-amber-600/60 shadow-amber-600/20 text-amber-500 bg-amber-950/30", pack: "fantasy" },
+
+  // Relationship Expansion Elements
+  marriage: { id: "marriage", name: "Marriage", emoji: "💍", description: "A formalized covenant between loving humans.", tier: "Social", color: "border-yellow-400/60 shadow-yellow-400/20 text-yellow-400 bg-yellow-950/30", pack: "relationships" },
+  datingapp: { id: "datingapp", name: "Dating App", emoji: "📱", description: "A digital social network looking for love match algorithms.", tier: "Social", color: "border-rose-400/60 shadow-rose-400/20 text-rose-400 bg-rose-950/30", pack: "relationships" },
+  trust: { id: "trust", name: "Trust", emoji: "🤝❤️", description: "The core foundation of friendship and family.", tier: "Social", color: "border-emerald-400/60 shadow-emerald-400/20 text-emerald-400 bg-emerald-950/30", pack: "relationships" },
+  anniversary: { id: "anniversary", name: "Anniversary", emoji: "📅", description: "Annual celebration marking relationship milestones.", tier: "Social", color: "border-cyan-300/60 shadow-cyan-300/20 text-cyan-300 bg-cyan-950/30", pack: "relationships" },
+  conflict: { id: "conflict", name: "Conflict", emoji: "⚡💔", description: "Clashing elements ending in arguments.", tier: "Social", color: "border-red-600/60 shadow-red-600/20 text-red-500 bg-red-950/30", pack: "relationships" },
+  heartbreak: { id: "heartbreak", name: "Heartbreak", emoji: "💔", description: "The painful emotional reaction from conflict.", tier: "Social", color: "border-zinc-500/60 shadow-zinc-500/20 text-zinc-400 bg-zinc-950/30", pack: "relationships" }
 }
 
 // Combination Registry (A + B = C)
-// Keys are formatted alphabetically e.g. "air+fire" to prevent duplicate order matching
 const RECIPES: Record<string, string> = {
   "fire+water": "steam",
   "earth+fire": "lava",
@@ -120,7 +144,7 @@ const RECIPES: Record<string, string> = {
   "fire+human": "cooking",
   "cooking+water": "soup",
   "animal+human": "pet",
-  "life+wind": "bird", // fallback to air for wind
+  "life+wind": "bird",
   "air+life": "bird",
   "animal+fire": "dragon",
   "earth+plant": "tree",
@@ -152,7 +176,33 @@ const RECIPES: Record<string, string> = {
   "sky+stone": "moon",
   "moon+robot": "spaceexplorer",
   "love+robot": "aicompanion",
-  "life+plant": "animal"
+  "life+plant": "animal",
+
+  // Sci-Fi combinations
+  "life+sky": "alien",
+  "machine+sky": "ufo",
+  "engine+ufo": "starship",
+  "energy+obsidian": "laser",
+  "blackhole+pressure": "obsidian",
+  "pressure+sky": "blackhole",
+  "computer+spaceexplorer": "timemachine",
+
+  // Fantasy combinations
+  "energy+life": "magic",
+  "human+magic": "wizard",
+  "magic+paper": "spell",
+  "elixir+magic": "wizard",
+  "magic+tea": "elixir",
+  "bird+fire": "phoenix",
+  "house+stone": "castle",
+
+  // Relationships combinations
+  "family+love": "marriage",
+  "computer+love": "datingapp",
+  "friendship+love": "trust",
+  "love+moon": "anniversary",
+  "fire+friendship": "conflict",
+  "conflict+love": "heartbreak"
 }
 
 // Campaign Quests
@@ -176,7 +226,21 @@ export default function WordchemyPage() {
   const [gameState, setGameState] = useState<GameState>("MENU")
   const [discovered, setDiscovered] = useState<string[]>(["fire", "water", "earth", "air"])
   const [workspace, setWorkspace] = useState<string[]>([])
-  
+
+  // Coins & Expansion Unlocks State
+  const [userId, setUserId] = useState<string | null>(null)
+  const [coins, setCoins] = useState(0)
+
+  // Instability / Energy Limits
+  const [energy, setEnergy] = useState(100)
+  const [consecutiveFailures, setConsecutiveFailures] = useState(0)
+  const [isStabilizing, setIsStabilizing] = useState(false)
+  const [cooldown, setCooldown] = useState(0)
+  const [comboMultiplier, setComboMultiplier] = useState(1)
+
+  // Unlocked expansion packs
+  const [unlockedPacks, setUnlockedPacks] = useState<string[]>(["core"])
+
   // Custom display/alert state
   const [alertMsg, setAlertMsg] = useState<{ text: string; success: boolean } | null>(null)
   const [recentUnlock, setRecentUnlock] = useState<string | null>(null)
@@ -192,21 +256,37 @@ export default function WordchemyPage() {
   const [sharedDiscovered, setSharedDiscovered] = useState<string[]>(["fire", "water", "earth", "air"])
   const [targetElement, setTargetElement] = useState<string>("life")
   const [raceWinner, setRaceWinner] = useState<{ name: string; time: string } | null>(null)
-  
+
   // Real-time log/feed
   const [feed, setFeed] = useState<string[]>([])
 
   const channelRef = useRef<any>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Load auth username and local save files
+  // Load auth username, local save files, and pack unlocks
   useEffect(() => {
     const fetchUser = async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user?.user_metadata?.full_name) {
-        setUsername(session.user.user_metadata.full_name)
-      } else if (session?.user?.email) {
-        setUsername(session.user.email.split("@")[0])
+      let currentUserId = null
+      if (session?.user) {
+        currentUserId = session.user.id
+        setUserId(session.user.id)
+        if (session.user.user_metadata?.full_name) {
+          setUsername(session.user.user_metadata.full_name)
+        } else if (session.user.email) {
+          setUsername(session.user.email.split("@")[0])
+        }
+      }
+
+      if (typeof window !== "undefined") {
+        const coinKey = currentUserId ? `playlab_coins_${currentUserId}` : "playlab_coins_local"
+        const savedCoins = localStorage.getItem(coinKey)
+        if (savedCoins) {
+          setCoins(parseInt(savedCoins) || 0)
+        } else {
+          setCoins(100)
+          localStorage.setItem(coinKey, "100")
+        }
       }
     }
     fetchUser()
@@ -223,6 +303,18 @@ export default function WordchemyPage() {
           console.error("Failed to load local recipe data:", e)
         }
       }
+
+      const savedPacks = localStorage.getItem("wordchemy_packs")
+      if (savedPacks) {
+        try {
+          const parsed = JSON.parse(savedPacks)
+          if (Array.isArray(parsed)) {
+            setUnlockedPacks(parsed)
+          }
+        } catch (e) {
+          console.error("Failed to load pack save states:", e)
+        }
+      }
     }
 
     return () => {
@@ -231,6 +323,26 @@ export default function WordchemyPage() {
       }
     }
   }, [])
+
+  // Cooldown countdown timer logic
+  useEffect(() => {
+    let clock: NodeJS.Timeout
+    if (isStabilizing && cooldown > 0) {
+      clock = setInterval(() => {
+        setCooldown(prev => {
+          if (prev <= 1) {
+            clearInterval(clock)
+            setIsStabilizing(false)
+            setEnergy(50)
+            triggerAlert("Alchemical core stabilized! Recharged to 50 Energy.", true)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+    }
+    return () => clearInterval(clock)
+  }, [isStabilizing, cooldown])
 
   const triggerAlert = (text: string, success: boolean = true) => {
     setAlertMsg({ text, success })
@@ -244,8 +356,60 @@ export default function WordchemyPage() {
     localStorage.setItem("wordchemy_discovered", JSON.stringify(list))
   }
 
+  // Save unlocked packs to localstorage
+  const saveOfflinePacks = (list: string[]) => {
+    setUnlockedPacks(list)
+    localStorage.setItem("wordchemy_packs", JSON.stringify(list))
+  }
+
+  // Buy pack logic
+  const buyPack = (packKey: string, costElements: number, costCoins: number, useCoins: boolean) => {
+    if (unlockedPacks.includes(packKey)) {
+      triggerAlert("Pack already unlocked!", false)
+      return
+    }
+
+    if (useCoins) {
+      const coinKey = userId ? `playlab_coins_${userId}` : "playlab_coins_local"
+      if (coins < costCoins) {
+        triggerAlert("Insufficient coins!", false)
+        return
+      }
+      setCoins(prev => {
+        const next = prev - costCoins
+        localStorage.setItem(coinKey, next.toString())
+        return next
+      })
+    } else {
+      if (discovered.length < costElements) {
+        triggerAlert(`Need at least ${costElements} elements discovered!`, false)
+        return
+      }
+    }
+
+    const newList = [...unlockedPacks, packKey]
+    saveOfflinePacks(newList)
+
+    // Immediately push pack starting elements
+    let startingEl = ""
+    if (packKey === "scifi") startingEl = "alien"
+    else if (packKey === "fantasy") startingEl = "magic"
+    else if (packKey === "relationships") startingEl = "datingapp"
+
+    if (startingEl && !discovered.includes(startingEl)) {
+      const updatedDiscovered = [...discovered, startingEl]
+      saveOfflineDiscovered(updatedDiscovered)
+    }
+
+    triggerAlert(`Successfully unlocked the ${packKey.toUpperCase()} expansion pack!`, true)
+  }
+
   // Element combination logic
   const handleAddToWorkspace = (elId: string) => {
+    if (isStabilizing) {
+      triggerAlert("Core stabilizing! Workspace locked.", false)
+      return
+    }
     if (workspace.length >= 2) {
       triggerAlert("Mixing board full. Remove elements or combine!", false)
       return
@@ -266,12 +430,32 @@ export default function WordchemyPage() {
 
     const key = [...workspace].sort().join("+")
     const result = RECIPES[key]
+    const matchedElementObj = result ? ELEMENTS[result] : null
 
-    if (result && ELEMENTS[result]) {
-      const targetElementObj = ELEMENTS[result]
-      
+    // Check if the output element pack is unlocked
+    const isPackUnlocked = matchedElementObj ? unlockedPacks.includes(matchedElementObj.pack) : false
+
+    if (result && matchedElementObj && isPackUnlocked) {
+      // SUCCESSFUL COMBO
+      setConsecutiveFailures(0)
+      setComboMultiplier(prev => Math.min(5, prev + 1))
+      setEnergy(prev => Math.min(100, prev + 15))
+
       if (gameState === "PLAYING_COOP") {
-        // Co-op mode sync
+        // Co-op mode sync: Update locally first
+        setSharedDiscovered(prev => {
+          if (!prev.includes(result)) {
+            return [...prev, result]
+          }
+          return prev
+        })
+        setFeed(prev => [
+          `You fused ${ELEMENTS[workspace[0]].name} + ${ELEMENTS[workspace[1]].name} ➔ Unlocked ${matchedElementObj.name}!`,
+          ...prev
+        ])
+        triggerAlert(`You unlocked ${matchedElementObj.name}!`, true)
+
+        // Then broadcast
         if (channelRef.current) {
           channelRef.current.send({
             type: 'broadcast',
@@ -289,7 +473,7 @@ export default function WordchemyPage() {
           const newList = [...discovered, result]
           setDiscovered(newList)
         }
-        
+
         // Check if target reached
         if (result === targetElement) {
           if (channelRef.current) {
@@ -308,13 +492,29 @@ export default function WordchemyPage() {
           const newList = [...discovered, result]
           saveOfflineDiscovered(newList)
           setRecentUnlock(result)
-          triggerAlert(`Discovered: ${targetElementObj.name}!`, true)
+          triggerAlert(`Discovered: ${matchedElementObj.name}! (+15 Energy, Combo ${comboMultiplier}x)`, true)
         } else {
-          triggerAlert(`You already made ${targetElementObj.name}!`, true)
+          triggerAlert(`You already made ${matchedElementObj.name}! (+15 Energy)`, true)
         }
       }
     } else {
-      triggerAlert("No reaction occurs. Try different concepts!", false)
+      // UNSUCCESSFUL COMBO: Apply penalty
+      setComboMultiplier(1)
+      const penaltyCost = 15 * (consecutiveFailures + 1)
+      setConsecutiveFailures(prev => prev + 1)
+
+      setEnergy(prev => {
+        const nextVal = prev - penaltyCost
+        if (nextVal <= 0) {
+          setIsStabilizing(true)
+          setCooldown(10)
+          setWorkspace([])
+          triggerAlert("Core Overheated! Board reset. Cooldown initiated.", false)
+          return 0
+        }
+        triggerAlert(`No reaction occurs. Cost: -${penaltyCost} Energy.`, false)
+        return nextVal
+      })
     }
 
     setWorkspace([])
@@ -360,14 +560,15 @@ export default function WordchemyPage() {
 
       Object.keys(presenceState).forEach(key => {
         const presences = presenceState[key] as any[]
-        presences.forEach(pres => {
+        if (presences.length > 0) {
+          const pres = presences[0]
           mappedPlayers.push({
             presenceId: key,
             name: pres.name || "Anonymous",
             isHost: pres.isHost || false,
             progress: pres.progress || 4,
           })
-        })
+        }
       })
 
       setPlayers(mappedPlayers)
@@ -519,14 +720,17 @@ export default function WordchemyPage() {
     }
   }, [discovered, gameState])
 
+  // Count active elements
+  const totalAvailableElements = Object.keys(ELEMENTS).length
+  const coreElementsDiscovered = discovered.filter(k => ELEMENTS[k]?.pack === "core").length
+
   return (
     <div className="max-w-5xl mx-auto min-h-[calc(100vh-120px)] flex flex-col space-y-6">
-      
+
       {/* Alert Banner */}
       {alertMsg && (
-        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl border text-xs font-semibold shadow-2xl transition-all duration-300 animate-in fade-in slide-in-from-top-4 ${
-          alertMsg.success ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-400'
-        }`}>
+        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl border text-xs font-semibold shadow-2xl transition-all duration-300 animate-in fade-in slide-in-from-top-4 ${alertMsg.success ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-400'
+          }`}>
           {alertMsg.text}
         </div>
       )}
@@ -551,9 +755,14 @@ export default function WordchemyPage() {
             <ArrowLeft className="h-4 w-4 mr-2" /> Back to Menu
           </button>
         )}
-        <div className="font-mono text-blue-400 font-bold tracking-widest uppercase text-xs flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-blue-400" />
-          Wordchemy Lab
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5 px-3 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded-full text-xs font-bold text-yellow-400">
+            <Zap className="h-3.5 w-3.5 fill-current text-yellow-400" /> {coins} Coins
+          </div>
+          <div className="font-mono text-blue-400 font-bold tracking-widest uppercase text-xs flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-blue-400" />
+            Wordchemy Lab
+          </div>
         </div>
       </div>
 
@@ -589,7 +798,7 @@ export default function WordchemyPage() {
                 </div>
                 <h3 className="text-lg font-bold text-white mb-2">Solo Discovery</h3>
                 <p className="text-xs text-gray-400 leading-relaxed">
-                  Start with base elements. Explore combinations to unlock all 62 unique recipes in your offline library.
+                  Start with base elements. Explore combinations to unlock all unique recipes in your offline library.
                 </p>
               </button>
 
@@ -613,8 +822,21 @@ export default function WordchemyPage() {
               {/* Quest & Lore Card */}
               <div className="flex flex-col gap-3 justify-between">
                 <button
+                  onClick={() => setGameState("MARKETPLACE")}
+                  className="w-full flex items-center justify-between p-3.5 bg-gradient-to-r from-purple-500/10 to-indigo-500/10 border border-purple-500/20 hover:border-purple-500/40 rounded-xl transition-all text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <ShoppingBag className="h-5 w-5 text-purple-400" />
+                    <div>
+                      <h4 className="text-xs font-bold text-white">Marketplace Shop</h4>
+                      <p className="text-[10px] text-purple-300">Unlock expansion packs</p>
+                    </div>
+                  </div>
+                </button>
+
+                <button
                   onClick={() => setGameState("QUESTS")}
-                  className="w-full flex items-center justify-between p-4 bg-white/5 border border-white/5 hover:border-blue-500/30 rounded-xl transition-all text-left"
+                  className="w-full flex items-center justify-between p-3.5 bg-white/5 border border-white/5 hover:border-blue-500/30 rounded-xl transition-all text-left"
                 >
                   <div className="flex items-center gap-2">
                     <Trophy className="h-5 w-5 text-yellow-500" />
@@ -627,30 +849,25 @@ export default function WordchemyPage() {
 
                 <button
                   onClick={() => setGameState("LORE_BOOK")}
-                  className="w-full flex items-center justify-between p-4 bg-white/5 border border-white/5 hover:border-blue-500/30 rounded-xl transition-all text-left"
+                  className="w-full flex items-center justify-between p-3.5 bg-white/5 border border-white/5 hover:border-blue-500/30 rounded-xl transition-all text-left"
                 >
                   <div className="flex items-center gap-2">
                     <BookOpen className="h-5 w-5 text-cyan-400" />
                     <div>
                       <h4 className="text-xs font-bold text-white">Alchemy Lorebook</h4>
-                      <p className="text-[10px] text-gray-400">Discovered recipes index ({discovered.length} / 62)</p>
+                      <p className="text-[10px] text-gray-400">Discovered recipes index ({discovered.length} / {totalAvailableElements})</p>
                     </div>
                   </div>
                 </button>
-
-                <div className="bg-white/5 p-4 rounded-xl border border-white/5 text-center">
-                  <p className="text-[10px] text-gray-400 font-bold uppercase">Discovery Rate</p>
-                  <p className="text-xl font-black text-blue-400">{Math.round((discovered.length / 62) * 100)}%</p>
-                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* 2. SOLO MIXING WORKSPACE */}
+        {/* 2. SOLO PLAY (WORKSPACE & LIBRARY) */}
         {gameState === "SOLO_PLAY" && (
           <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch animate-in fade-in duration-300">
-            
+
             {/* Library sidebar */}
             <div className="md:col-span-1 glass-panel p-6 rounded-2xl border border-white/5 flex flex-col space-y-4 max-h-[500px] overflow-hidden">
               <div className="flex items-center justify-between border-b border-white/5 pb-2">
@@ -679,7 +896,7 @@ export default function WordchemyPage() {
 
             {/* Mixing Board Canvas */}
             <div className="md:col-span-2 glass-panel p-6 rounded-2xl border border-white/5 flex flex-col justify-between items-stretch min-h-[400px]">
-              
+
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-bold">Mixing Workspace</h2>
@@ -690,40 +907,72 @@ export default function WordchemyPage() {
                 </Button>
               </div>
 
-              {/* Canvas Center Slots */}
-              <div className="my-8 flex items-center justify-center gap-8">
-                {/* Slot 1 */}
-                <div className="h-28 w-28 rounded-2xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center relative bg-black/10 group">
-                  {workspace[0] ? (
-                    <button 
-                      onClick={() => handleRemoveFromWorkspace(0)}
-                      className={`absolute inset-0 rounded-2xl border flex flex-col items-center justify-center p-2 text-center transition-all ${ELEMENTS[workspace[0]]?.color}`}
-                    >
-                      <span className="text-3xl mb-1">{ELEMENTS[workspace[0]]?.emoji}</span>
-                      <span className="text-xs font-black truncate max-w-full">{ELEMENTS[workspace[0]]?.name}</span>
-                    </button>
-                  ) : (
-                    <span className="text-zinc-700 text-xs font-bold uppercase tracking-wider">Empty</span>
-                  )}
+              {/* Energy meter */}
+              <div className="space-y-1.5 mt-4">
+                <div className="flex justify-between items-center text-xs font-bold">
+                  <span className="text-gray-400 flex items-center gap-1.5">
+                    <Zap className="h-4 w-4 text-yellow-400" /> Alchemical Energy
+                  </span>
+                  <span className={`${energy < 30 ? 'text-red-500 animate-pulse' : 'text-white'}`}>{energy} / 100</span>
                 </div>
-
-                <div className="text-2xl font-black text-zinc-600">+</div>
-
-                {/* Slot 2 */}
-                <div className="h-28 w-28 rounded-2xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center relative bg-black/10 group">
-                  {workspace[1] ? (
-                    <button 
-                      onClick={() => handleRemoveFromWorkspace(1)}
-                      className={`absolute inset-0 rounded-2xl border flex flex-col items-center justify-center p-2 text-center transition-all ${ELEMENTS[workspace[1]]?.color}`}
-                    >
-                      <span className="text-3xl mb-1">{ELEMENTS[workspace[1]]?.emoji}</span>
-                      <span className="text-xs font-black truncate max-w-full">{ELEMENTS[workspace[1]]?.name}</span>
-                    </button>
-                  ) : (
-                    <span className="text-zinc-700 text-xs font-bold uppercase tracking-wider">Empty</span>
-                  )}
+                <div className="w-full bg-black/40 h-2 rounded-full overflow-hidden border border-white/5">
+                  <div
+                    className={`h-full transition-all duration-300 ${energy < 30 ? 'bg-red-500' : energy < 60 ? 'bg-orange-500' : 'bg-yellow-500'
+                      }`}
+                    style={{ width: `${energy}%` }}
+                  ></div>
                 </div>
               </div>
+
+              {/* Lockdown Timer Overheat indicator */}
+              {isStabilizing ? (
+                <div className="my-8 flex flex-col items-center justify-center p-6 bg-red-950/20 border border-red-500/20 rounded-2xl max-w-sm mx-auto space-y-2 animate-pulse">
+                  <ShieldAlert className="h-8 w-8 text-red-500" />
+                  <h4 className="font-bold text-red-400 text-sm">Alchemical Core Stabilization</h4>
+                  <p className="text-xs text-gray-400">Workspace locked for stabilization...</p>
+                  <span className="text-xl font-mono font-black text-red-500">{cooldown}s</span>
+                </div>
+              ) : (
+                /* Canvas Center Slots */
+                <div className="my-8 flex items-center justify-center gap-8">
+                  <div className="h-28 w-28 rounded-2xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center relative bg-black/10 group">
+                    {workspace[0] ? (
+                      <button
+                        onClick={() => handleRemoveFromWorkspace(0)}
+                        className={`absolute inset-0 rounded-2xl border flex flex-col items-center justify-center p-2 text-center transition-all ${ELEMENTS[workspace[0]]?.color}`}
+                      >
+                        <span className="text-3xl mb-1">{ELEMENTS[workspace[0]]?.emoji}</span>
+                        <span className="text-xs font-black truncate max-w-full">{ELEMENTS[workspace[0]]?.name}</span>
+                      </button>
+                    ) : (
+                      <span className="text-zinc-700 text-xs font-bold uppercase tracking-wider">Empty</span>
+                    )}
+                  </div>
+
+                  <div className="text-2xl font-black text-zinc-600">+</div>
+
+                  <div className="h-28 w-28 rounded-2xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center relative bg-black/10 group">
+                    {workspace[1] ? (
+                      <button
+                        onClick={() => handleRemoveFromWorkspace(1)}
+                        className={`absolute inset-0 rounded-2xl border flex flex-col items-center justify-center p-2 text-center transition-all ${ELEMENTS[workspace[1]]?.color}`}
+                      >
+                        <span className="text-3xl mb-1">{ELEMENTS[workspace[1]]?.emoji}</span>
+                        <span className="text-xs font-black truncate max-w-full">{ELEMENTS[workspace[1]]?.name}</span>
+                      </button>
+                    ) : (
+                      <span className="text-zinc-700 text-xs font-bold uppercase tracking-wider">Empty</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Combo Multiplier logs */}
+              {comboMultiplier > 1 && (
+                <p className="text-center text-xs text-yellow-400 font-bold tracking-widest uppercase animate-pulse">
+                  🔥 DISCOVERY COMBO: {comboMultiplier}X MULTIPLIER!
+                </p>
+              )}
 
               {/* Last unlocked info display */}
               {recentUnlock && ELEMENTS[recentUnlock] ? (
@@ -750,9 +999,8 @@ export default function WordchemyPage() {
               {QUESTS_LIST.map(quest => {
                 const isCompleted = discovered.includes(quest.targetElement)
                 return (
-                  <div key={quest.id} className={`p-4 rounded-xl border flex items-center justify-between ${
-                    isCompleted ? 'bg-green-500/5 border-green-500/20' : 'bg-white/5 border-white/5'
-                  }`}>
+                  <div key={quest.id} className={`p-4 rounded-xl border flex items-center justify-between ${isCompleted ? 'bg-green-500/5 border-green-500/20' : 'bg-white/5 border-white/5'
+                    }`}>
                     <div>
                       <h4 className="font-bold text-white text-sm flex items-center gap-2">
                         {quest.title} {isCompleted && <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">COMPLETE</span>}
@@ -781,9 +1029,8 @@ export default function WordchemyPage() {
                 const el = ELEMENTS[key]
                 const isUnlocked = discovered.includes(key)
                 return (
-                  <div key={el.id} className={`p-4 rounded-xl border flex gap-4 items-start ${
-                    isUnlocked ? 'bg-white/5 border-white/5' : 'bg-black/40 border-white/5 opacity-50'
-                  }`}>
+                  <div key={el.id} className={`p-4 rounded-xl border flex gap-4 items-start ${isUnlocked ? 'bg-white/5 border-white/5' : 'bg-black/40 border-white/5 opacity-50'
+                    }`}>
                     <div className="text-3xl p-2 bg-black/40 border border-white/5 rounded-xl">
                       {isUnlocked ? el.emoji : "❓"}
                     </div>
@@ -793,13 +1040,13 @@ export default function WordchemyPage() {
                         {isUnlocked ? `"${el.description}"` : "Discover combinations to unlock this recipe's mystery lore."}
                       </p>
                       <div className="flex items-center gap-2 mt-2">
-                        <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
-                          el.tier === "Base" ? 'bg-indigo-500/20 text-indigo-300' :
-                          el.tier === "Natural" ? 'bg-emerald-500/20 text-emerald-300' :
-                          el.tier === "Technical" ? 'bg-blue-500/20 text-blue-300' : 'bg-rose-500/20 text-rose-300'
-                        }`}>
+                        <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${el.tier === "Base" ? 'bg-indigo-500/20 text-indigo-300' :
+                            el.tier === "Natural" ? 'bg-emerald-500/20 text-emerald-300' :
+                              el.tier === "Technical" ? 'bg-blue-500/20 text-blue-300' : 'bg-rose-500/20 text-rose-300'
+                          }`}>
                           {el.tier} Tier
                         </span>
+                        <span className="text-[9px] text-zinc-500 uppercase font-black">Pack: {el.pack}</span>
                       </div>
                     </div>
                   </div>
@@ -809,9 +1056,131 @@ export default function WordchemyPage() {
           </div>
         )}
 
-        {/* 5. MULTIPLAYER SETUP SCREEN */}
+        {/* 5. MARKETPLACE SHOP */}
+        {gameState === "MARKETPLACE" && (
+          <div className="w-full max-w-3xl glass-panel p-6 rounded-2xl border border-white/5 space-y-6 animate-in fade-in duration-300">
+            <div className="border-b border-white/5 pb-3">
+              <h2 className="text-2xl font-black text-white flex items-center gap-2">
+                <ShoppingBag className="h-6 w-6 text-purple-400" /> Marketplace Packs Shop
+              </h2>
+              <p className="text-xs text-gray-400">Expand your element library by unlocking theme packs with your discovery progress.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Sci-Fi */}
+              <div className="p-5 bg-white/5 rounded-2xl border border-white/5 flex flex-col justify-between space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-3xl">🛸</span>
+                    {unlockedPacks.includes("scifi") && (
+                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-green-500/20 text-green-400">Active</span>
+                    )}
+                  </div>
+                  <h4 className="font-bold text-white text-sm">Sci-Fi Expansion</h4>
+                  <p className="text-xs text-gray-400">Adds 6 cosmic and high-tech elements including Alien, UFO, Starship, Laser, and Black Hole.</p>
+                </div>
+                <div className="space-y-2 border-t border-white/5 pt-3">
+                  {unlockedPacks.includes("scifi") ? (
+                    <Button disabled className="w-full bg-green-500/10 text-green-400 border border-green-500/20 text-xs">
+                      UNLOCKED
+                    </Button>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        onClick={() => buyPack("scifi", 12, 300, false)}
+                        className="w-full bg-blue-600 hover:bg-blue-500 text-xs font-bold py-2"
+                      >
+                        Unlock (12 Elements)
+                      </Button>
+                      <Button
+                        onClick={() => buyPack("scifi", 12, 300, true)}
+                        className="w-full bg-yellow-600 hover:bg-yellow-500 text-xs font-bold py-2 flex items-center justify-center gap-1.5"
+                      >
+                        <Zap className="h-3 w-3 fill-current text-white" /> Bypass (300 Coins)
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Fantasy */}
+              <div className="p-5 bg-white/5 rounded-2xl border border-white/5 flex flex-col justify-between space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-3xl">🧙</span>
+                    {unlockedPacks.includes("fantasy") && (
+                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-green-500/20 text-green-400">Active</span>
+                    )}
+                  </div>
+                  <h4 className="font-bold text-white text-sm">Fantasy Expansion</h4>
+                  <p className="text-xs text-gray-400">Adds 6 arcane elements including Magic, Wizards, Spells, Elixirs, and Castles.</p>
+                </div>
+                <div className="space-y-2 border-t border-white/5 pt-3">
+                  {unlockedPacks.includes("fantasy") ? (
+                    <Button disabled className="w-full bg-green-500/10 text-green-400 border border-green-500/20 text-xs">
+                      UNLOCKED
+                    </Button>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        onClick={() => buyPack("fantasy", 20, 500, false)}
+                        className="w-full bg-blue-600 hover:bg-blue-500 text-xs font-bold py-2"
+                      >
+                        Unlock (20 Elements)
+                      </Button>
+                      <Button
+                        onClick={() => buyPack("fantasy", 20, 500, true)}
+                        className="w-full bg-yellow-600 hover:bg-yellow-500 text-xs font-bold py-2 flex items-center justify-center gap-1.5"
+                      >
+                        <Zap className="h-3 w-3 fill-current text-white" /> Bypass (500 Coins)
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Relationships */}
+              <div className="p-5 bg-white/5 rounded-2xl border border-white/5 flex flex-col justify-between space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-3xl">💍</span>
+                    {unlockedPacks.includes("relationships") && (
+                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-green-500/20 text-green-400">Active</span>
+                    )}
+                  </div>
+                  <h4 className="font-bold text-white text-sm">Relationships Pack</h4>
+                  <p className="text-xs text-gray-400">Adds 6 relationship elements including Marriage, Trust, Dating App, and Conflict resolution.</p>
+                </div>
+                <div className="space-y-2 border-t border-white/5 pt-3">
+                  {unlockedPacks.includes("relationships") ? (
+                    <Button disabled className="w-full bg-green-500/10 text-green-400 border border-green-500/20 text-xs">
+                      UNLOCKED
+                    </Button>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        onClick={() => buyPack("relationships", 30, 800, false)}
+                        className="w-full bg-blue-600 hover:bg-blue-500 text-xs font-bold py-2"
+                      >
+                        Unlock (30 Elements)
+                      </Button>
+                      <Button
+                        onClick={() => buyPack("relationships", 30, 800, true)}
+                        className="w-full bg-yellow-600 hover:bg-yellow-500 text-xs font-bold py-2 flex items-center justify-center gap-1.5"
+                      >
+                        <Zap className="h-3 w-3 fill-current text-white" /> Bypass (800 Coins)
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 6. MULTIPLAYER SETUP SCREEN */}
         {gameState === "MULTIPLAYER_SETUP" && (
-          <div className="w-full max-w-md glass-panel p-8 rounded-3xl border border-white/5 space-y-6 animate-in fade-in duration-300">
+          <div className="w-full max-w-md glass-panel p-8 rounded-3xl border border-white/5 space-y-6 animate-in fade-in zoom-in duration-300">
             <div className="text-center space-y-2">
               <span className="px-3 py-1 bg-purple-500/10 text-purple-400 border border-purple-500/20 text-xs uppercase tracking-widest font-black rounded-full">
                 Real-Time Arena Setup
@@ -833,8 +1202,8 @@ export default function WordchemyPage() {
               </div>
 
               <div className="border-t border-white/5 pt-4 grid grid-cols-1 gap-3">
-                <Button 
-                  onClick={createRoom} 
+                <Button
+                  onClick={createRoom}
                   disabled={!username.trim()}
                   className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2"
                 >
@@ -856,8 +1225,8 @@ export default function WordchemyPage() {
                     onChange={e => setRoomInput(e.target.value.toUpperCase())}
                     className="flex-1 min-w-0 px-4 py-3 bg-white/5 rounded-xl border border-white/10 outline-none text-white focus:border-purple-500/50 text-center font-black tracking-widest text-lg"
                   />
-                  <Button 
-                    onClick={handleJoinRoom} 
+                  <Button
+                    onClick={handleJoinRoom}
                     disabled={!username.trim() || roomInput.length !== 4}
                     className="bg-zinc-800 hover:bg-zinc-700 text-white px-5 rounded-xl font-bold flex items-center gap-1.5"
                   >
@@ -869,7 +1238,7 @@ export default function WordchemyPage() {
           </div>
         )}
 
-        {/* 6. MULTIPLAYER LOBBY SCREEN */}
+        {/* 7. MULTIPLAYER LOBBY SCREEN */}
         {gameState === "MULTIPLAYER_LOBBY" && (
           <div className="w-full max-w-4xl grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch animate-in fade-in duration-300">
             {/* Left panel: configurations */}
@@ -908,14 +1277,14 @@ export default function WordchemyPage() {
 
               {isHost ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6">
-                  <Button 
-                    onClick={startCoop} 
+                  <Button
+                    onClick={startCoop}
                     className="w-full bg-gradient-to-r from-teal-500 to-emerald-600 text-white py-4 font-bold rounded-xl shadow-lg hover:scale-[1.01] transition-transform"
                   >
                     Start Co-op Alchemy Lab
                   </Button>
-                  <Button 
-                    onClick={startRace} 
+                  <Button
+                    onClick={startRace}
                     className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 text-white py-4 font-bold rounded-xl shadow-lg hover:scale-[1.01] transition-transform"
                   >
                     Start Discovery Race
@@ -968,9 +1337,9 @@ export default function WordchemyPage() {
                 </div>
               </div>
 
-              <Button 
-                onClick={leaveLobby} 
-                variant="ghost" 
+              <Button
+                onClick={leaveLobby}
+                variant="ghost"
                 className="w-full text-xs font-semibold hover:bg-red-500/10 text-gray-500 hover:text-red-400 flex items-center justify-center gap-1.5 border border-white/5"
               >
                 <LogOut className="h-3.5 w-3.5" /> Leave Lobby
@@ -979,7 +1348,7 @@ export default function WordchemyPage() {
           </div>
         )}
 
-        {/* 7. MULTIPLAYER CO-OP LAB */}
+        {/* 8. MULTIPLAYER CO-OP LAB */}
         {gameState === "PLAYING_COOP" && (
           <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch animate-in fade-in duration-300">
             {/* Library list panel */}
@@ -1023,7 +1392,7 @@ export default function WordchemyPage() {
               <div className="my-8 flex items-center justify-center gap-8">
                 <div className="h-28 w-28 rounded-2xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center relative bg-black/10">
                   {workspace[0] ? (
-                    <button 
+                    <button
                       onClick={() => handleRemoveFromWorkspace(0)}
                       className={`absolute inset-0 rounded-2xl border flex flex-col items-center justify-center p-2 text-center transition-all ${ELEMENTS[workspace[0]]?.color}`}
                     >
@@ -1037,7 +1406,7 @@ export default function WordchemyPage() {
                 <div className="text-2xl font-black text-zinc-600">+</div>
                 <div className="h-28 w-28 rounded-2xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center relative bg-black/10">
                   {workspace[1] ? (
-                    <button 
+                    <button
                       onClick={() => handleRemoveFromWorkspace(1)}
                       className={`absolute inset-0 rounded-2xl border flex flex-col items-center justify-center p-2 text-center transition-all ${ELEMENTS[workspace[1]]?.color}`}
                     >
@@ -1066,7 +1435,7 @@ export default function WordchemyPage() {
           </div>
         )}
 
-        {/* 8. MULTIPLAYER DISCOVERY RACE */}
+        {/* 9. MULTIPLAYER DISCOVERY RACE */}
         {gameState === "PLAYING_RACE" && (
           <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch animate-in fade-in duration-300">
             {/* Library sidebar */}
@@ -1094,7 +1463,7 @@ export default function WordchemyPage() {
 
             {/* Mixing workspace panel */}
             <div className="lg:col-span-2 glass-panel p-6 rounded-2xl border border-white/5 flex flex-col justify-between items-stretch min-h-[440px]">
-              
+
               <div className="flex items-center justify-between border-b border-white/5 pb-3">
                 <div>
                   <p className="text-[10px] text-purple-400 font-bold uppercase tracking-wider mb-1">RACE TARGET OBJECTIVE</p>
@@ -1112,7 +1481,7 @@ export default function WordchemyPage() {
               <div className="my-8 flex items-center justify-center gap-8">
                 <div className="h-28 w-28 rounded-2xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center relative bg-black/10">
                   {workspace[0] ? (
-                    <button 
+                    <button
                       onClick={() => handleRemoveFromWorkspace(0)}
                       className={`absolute inset-0 rounded-2xl border flex flex-col items-center justify-center p-2 text-center transition-all ${ELEMENTS[workspace[0]]?.color}`}
                     >
@@ -1126,7 +1495,7 @@ export default function WordchemyPage() {
                 <div className="text-2xl font-black text-zinc-600">+</div>
                 <div className="h-28 w-28 rounded-2xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center relative bg-black/10">
                   {workspace[1] ? (
-                    <button 
+                    <button
                       onClick={() => handleRemoveFromWorkspace(1)}
                       className={`absolute inset-0 rounded-2xl border flex flex-col items-center justify-center p-2 text-center transition-all ${ELEMENTS[workspace[1]]?.color}`}
                     >
@@ -1156,11 +1525,11 @@ export default function WordchemyPage() {
           </div>
         )}
 
-        {/* 9. RACE RESULTS WINDOW */}
+        {/* 10. RACE RESULTS WINDOW */}
         {gameState === "RESULTS" && (
           <div className="w-full max-w-md glass-panel p-8 rounded-3xl border border-white/5 text-center space-y-6 animate-in zoom-in duration-300">
             <Trophy className="h-16 w-16 text-yellow-500 mx-auto drop-shadow-[0_0_20px_rgba(234,179,8,0.4)] animate-bounce" />
-            
+
             <div>
               <span className="px-3 py-1 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 text-xs uppercase tracking-widest font-black rounded-full">
                 Race Finished
@@ -1180,7 +1549,7 @@ export default function WordchemyPage() {
 
             <div className="border-t border-white/5 pt-6 flex flex-col gap-2">
               {isHost ? (
-                <Button 
+                <Button
                   onClick={returnToLobby}
                   className="w-full bg-white hover:bg-zinc-200 text-black font-bold py-3.5 rounded-xl shadow-xl transition-all"
                 >
@@ -1189,9 +1558,9 @@ export default function WordchemyPage() {
               ) : (
                 <p className="text-xs text-zinc-500 italic animate-pulse">Waiting for host to return to lobby...</p>
               )}
-              <Button 
+              <Button
                 onClick={leaveLobby}
-                variant="ghost" 
+                variant="ghost"
                 className="w-full text-xs font-semibold hover:bg-red-500/10 text-gray-400 hover:text-red-400 py-3 rounded-xl border border-white/5"
               >
                 Exit Room

@@ -1,12 +1,12 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Timer, Trophy, Play, ArrowLeft, RefreshCw, Sparkles, AlertTriangle, User, Bot, Zap, Star, ShieldAlert, Users, Copy, Plus, LogIn, Check, Crown, LogOut } from "lucide-react"
+import { Timer, Trophy, Play, ArrowLeft, RefreshCw, Sparkles, AlertTriangle, User, Bot, Zap, Star, ShieldAlert, Users, Copy, Plus, LogIn, Check, Crown, LogOut, ShoppingBag, BookOpen } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase/client"
 
-type GameState = "MENU" | "SOLO_CONFIG" | "MULTIPLAYER_SETUP" | "MULTIPLAYER_LOBBY" | "COUNTDOWN" | "PLAYING" | "RESULTS"
+type GameState = "MENU" | "SOLO_CONFIG" | "MULTIPLAYER_SETUP" | "MULTIPLAYER_LOBBY" | "COUNTDOWN" | "PLAYING" | "RESULTS" | "SHOP" | "QUESTS"
 type Difficulty = "Beginner" | "Easy" | "Normal" | "Hard" | "Expert" | "Master"
 type CategoryPack = "Basic" | "Culture" | "Science" | "Geography" | "Mixed" | "Friend" | "Family" | "Dating" | "Study"
 type ChaosModifier = "None" | "Double Points" | "Ban Vowels" | "Time Rush" | "Sudden Death"
@@ -439,6 +439,20 @@ export default function ChaosAlphabetPage() {
   const [countdown, setCountdown] = useState(3)
   const [timer, setTimer] = useState(60)
 
+  // Coins & Expansion Unlocks State
+  const [userId, setUserId] = useState<string | null>(null)
+  const [coins, setCoins] = useState(0)
+  const [unlockedPacks, setUnlockedPacks] = useState<string[]>(["Basic"])
+  const [unlockedModifiers, setUnlockedModifiers] = useState<string[]>(["None", "Double Points"])
+  const [activeQuests, setActiveQuests] = useState<{ id: string; title: string; description: string; reward: number; completed: boolean }[]>([
+    { id: "alpha_score_80", title: "Word Master", description: "Score over 80 points in a single round.", reward: 50, completed: false },
+    { id: "alpha_perfect", title: "Perfect Round", description: "Get a Perfect Round bonus (+25) in Solo Play.", reward: 75, completed: false },
+    { id: "alpha_speed", title: "Speed Demon", description: "Submit all answers in under 15 seconds.", reward: 100, completed: false },
+    { id: "alpha_modifier", title: "Chaos Survivor", description: "Complete a full Solo Match using any modifier other than None.", reward: 60, completed: false }
+  ])
+  const [alertMsg, setAlertMsg] = useState<{ text: string; success: boolean } | null>(null)
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
+
   // Configuration State
   const [selectedPack, setSelectedPack] = useState<CategoryPack>("Basic")
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>("Normal")
@@ -508,14 +522,143 @@ export default function ChaosAlphabetPage() {
 
   const activeIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const channelRef = useRef<any>(null)
+  
+  const triggerAlert = (text: string, success: boolean = true) => {
+    setAlertMsg({ text, success })
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => setAlertMsg(null), 3000)
+  }
+
+  const awardCoins = (amount: number, customId?: string | null) => {
+    if (amount <= 0) return
+    const activeId = customId !== undefined ? customId : userId
+    const coinKey = activeId ? `playlab_coins_${activeId}` : "playlab_coins_local"
+    setCoins(prev => {
+      const next = prev + amount
+      localStorage.setItem(coinKey, next.toString())
+      return next
+    })
+    triggerAlert(`Earned +${amount} PlayLab Coins!`, true)
+  }
+
+  const spendCoins = (amount: number): boolean => {
+    const coinKey = userId ? `playlab_coins_${userId}` : "playlab_coins_local"
+    let success = false
+    setCoins(prev => {
+      if (prev >= amount) {
+        const next = prev - amount
+        localStorage.setItem(coinKey, next.toString())
+        success = true
+        return next
+      }
+      return prev
+    })
+    return success
+  }
+
+  const buyPack = (packName: string, cost: number) => {
+    if (unlockedPacks.includes(packName)) {
+      triggerAlert("Pack already unlocked!", false)
+      return
+    }
+    if (spendCoins(cost)) {
+      const newList = [...unlockedPacks, packName]
+      setUnlockedPacks(newList)
+      const packKey = userId ? `chaos_packs_${userId}` : "chaos_packs_local"
+      localStorage.setItem(packKey, JSON.stringify(newList))
+      triggerAlert(`Unlocked the ${packName} Pack!`, true)
+    } else {
+      triggerAlert("Insufficient coins!", false)
+    }
+  }
+
+  const buyModifier = (modName: string, cost: number) => {
+    if (unlockedModifiers.includes(modName)) {
+      triggerAlert("Modifier already unlocked!", false)
+      return
+    }
+    if (spendCoins(cost)) {
+      const newList = [...unlockedModifiers, modName]
+      setUnlockedModifiers(newList)
+      const modKey = userId ? `chaos_mods_${userId}` : "chaos_mods_local"
+      localStorage.setItem(modKey, JSON.stringify(newList))
+      triggerAlert(`Unlocked the ${modName} Modifier!`, true)
+    } else {
+      triggerAlert("Insufficient coins!", false)
+    }
+  }
+
+  const checkQuests = (roundScore: number, isPerfect: boolean, submitDur: number, activeMod: string) => {
+    const questKey = userId ? `chaos_quests_${userId}` : "chaos_quests_local"
+    setActiveQuests(prev => {
+      const updated = prev.map(q => {
+        if (q.completed) return q
+        let done = false
+        if (q.id === "alpha_score_80" && roundScore > 80) done = true
+        if (q.id === "alpha_perfect" && isPerfect) done = true
+        if (q.id === "alpha_speed" && submitDur < 15) done = true
+        if (q.id === "alpha_modifier" && activeMod !== "None") done = true
+
+        if (done) {
+          setTimeout(() => awardCoins(q.reward), 100)
+          triggerAlert(`Quest Completed: ${q.title}! (+${q.reward} Coins)`, true)
+          return { ...q, completed: true }
+        }
+        return q
+      })
+      localStorage.setItem(questKey, JSON.stringify(updated))
+      return updated
+    })
+  }
+
   // Load auth username and local leaderboards on mount
   useEffect(() => {
     const fetchUser = async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user?.user_metadata?.full_name) {
-        setUsername(session.user.user_metadata.full_name)
-      } else if (session?.user?.email) {
-        setUsername(session.user.email.split("@")[0])
+      let currentUserId = null
+      if (session?.user) {
+        currentUserId = session.user.id
+        setUserId(session.user.id)
+        if (session.user.user_metadata?.full_name) {
+          setUsername(session.user.user_metadata.full_name)
+        } else if (session.user.email) {
+          setUsername(session.user.email.split("@")[0])
+        }
+      }
+
+      if (typeof window !== "undefined") {
+        const coinKey = currentUserId ? `playlab_coins_${currentUserId}` : "playlab_coins_local"
+        const savedCoins = localStorage.getItem(coinKey)
+        if (savedCoins) {
+          setCoins(parseInt(savedCoins) || 0)
+        } else {
+          setCoins(100)
+          localStorage.setItem(coinKey, "100")
+        }
+
+        const packKey = currentUserId ? `chaos_packs_${currentUserId}` : "chaos_packs_local"
+        const savedPacks = localStorage.getItem(packKey)
+        if (savedPacks) {
+          try {
+            setUnlockedPacks(JSON.parse(savedPacks))
+          } catch(e) {}
+        }
+
+        const modKey = currentUserId ? `chaos_mods_${currentUserId}` : "chaos_mods_local"
+        const savedMods = localStorage.getItem(modKey)
+        if (savedMods) {
+          try {
+            setUnlockedModifiers(JSON.parse(savedMods))
+          } catch(e) {}
+        }
+
+        const questKey = currentUserId ? `chaos_quests_${currentUserId}` : "chaos_quests_local"
+        const savedQuests = localStorage.getItem(questKey)
+        if (savedQuests) {
+          try {
+            setActiveQuests(JSON.parse(savedQuests))
+          } catch(e) {}
+        }
       }
     }
     fetchUser()
@@ -1100,6 +1243,13 @@ export default function ChaosAlphabetPage() {
         total
       })
 
+      // Award coins (20% of score)
+      const coinsEarned = Math.floor(total / 5)
+      awardCoins(coinsEarned)
+
+      // Evaluate active quests
+      checkQuests(total, perfect > 0, submissionDuration, selectedModifier)
+
       // Calculate AI Bot Score
       let aiBase = 0
       categories.forEach(cat => {
@@ -1186,9 +1336,14 @@ export default function ChaosAlphabetPage() {
             <ArrowLeft className="h-4 w-4 mr-2" /> Back to Menu
           </button>
         )}
-        <div className="font-mono text-primary font-bold tracking-widest uppercase text-xs flex items-center gap-2">
-          <Zap className="h-4 w-4 text-yellow-400" />
-          Chaos Alphabet Arena
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5 px-3 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded-full text-xs font-bold text-yellow-400">
+            <Zap className="h-3.5 w-3.5 fill-current text-yellow-400" /> {coins} Coins
+          </div>
+          <div className="font-mono text-primary font-bold tracking-widest uppercase text-xs flex items-center gap-2">
+            <Zap className="h-4 w-4 text-yellow-400" />
+            Chaos Alphabet Arena
+          </div>
         </div>
       </div>
 
@@ -1288,6 +1443,40 @@ export default function ChaosAlphabetPage() {
                   </div>
                 )}
               </div>
+
+              {/* Marketplace Card */}
+              <button
+                onClick={() => setGameState("SHOP")}
+                className="group relative overflow-hidden rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-500/10 to-indigo-500/5 p-6 text-left transition-all hover:scale-[1.02] hover:border-purple-500/40"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <ShoppingBag className="h-8 w-8 text-purple-400 group-hover:animate-pulse" />
+                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-purple-500/20 text-purple-300">
+                    Store
+                  </span>
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">▶ Packs Shop</h3>
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  Spend PlayLab Coins to unlock new category packs and chaotic modifiers.
+                </p>
+              </button>
+
+              {/* Quests Card */}
+              <button
+                onClick={() => setGameState("QUESTS")}
+                className="group relative overflow-hidden rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-cyan-500/10 to-teal-500/5 p-6 text-left transition-all hover:scale-[1.02] hover:border-cyan-500/40"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <Trophy className="h-8 w-8 text-cyan-400 group-hover:animate-bounce" />
+                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300">
+                    Rewards
+                  </span>
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">▶ Quest Log</h3>
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  Complete challenges during game rounds to earn extra PlayLab Coins.
+                </p>
+              </button>
             </div>
           </div>
         )}
@@ -1310,15 +1499,22 @@ export default function ChaosAlphabetPage() {
               <div className="space-y-3">
                 <label className="text-sm font-semibold text-gray-300">Category Pack</label>
                 <div className="grid grid-cols-2 gap-2">
-                  {(["Basic", "Culture", "Science", "Geography", "Mixed"] as CategoryPack[]).map(pack => (
-                    <button
-                      key={pack}
-                      onClick={() => handlePackChange(pack)}
-                      className={`p-3 text-xs rounded-xl border text-left transition-all ${selectedPack === pack ? 'border-primary bg-primary/10 text-white' : 'border-white/5 bg-white/5 text-gray-400 hover:bg-white/10'}`}
-                    >
-                      {pack} Pack
-                    </button>
-                  ))}
+                  {(["Basic", "Culture", "Science", "Geography", "Mixed"] as CategoryPack[]).map(pack => {
+                    const isUnlocked = unlockedPacks.includes(pack)
+                    return (
+                      <button
+                        key={pack}
+                        disabled={!isUnlocked}
+                        onClick={() => handlePackChange(pack)}
+                        className={`p-3 text-xs rounded-xl border text-left transition-all ${
+                          !isUnlocked ? 'opacity-40 cursor-not-allowed bg-zinc-900 border-zinc-800' :
+                          selectedPack === pack ? 'border-primary bg-primary/10 text-white' : 'border-white/5 bg-white/5 text-gray-400 hover:bg-white/10'
+                        }`}
+                      >
+                        {pack} Pack {!isUnlocked && "🔒"}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
@@ -1345,15 +1541,22 @@ export default function ChaosAlphabetPage() {
                 <AlertTriangle className="h-4 w-4 text-yellow-500" /> Chaos Modifier
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                {(["None", "Double Points", "Ban Vowels", "Time Rush", "Sudden Death"] as ChaosModifier[]).map(mod => (
-                  <button
-                    key={mod}
-                    onClick={() => handleModifierChange(mod)}
-                    className={`p-3 text-xs rounded-xl border text-center transition-all ${selectedModifier === mod ? 'border-red-500 bg-red-500/10 text-white' : 'border-white/5 bg-white/5 text-gray-400 hover:bg-white/10'}`}
-                  >
-                    {mod}
-                  </button>
-                ))}
+                {(["None", "Double Points", "Ban Vowels", "Time Rush", "Sudden Death"] as ChaosModifier[]).map(mod => {
+                  const isUnlocked = unlockedModifiers.includes(mod)
+                  return (
+                    <button
+                      key={mod}
+                      disabled={!isUnlocked}
+                      onClick={() => handleModifierChange(mod)}
+                      className={`p-3 text-xs rounded-xl border text-center transition-all ${
+                        !isUnlocked ? 'opacity-45 cursor-not-allowed bg-zinc-900 border-zinc-800 font-sans' :
+                        selectedModifier === mod ? 'border-red-500 bg-red-500/10 text-white' : 'border-white/5 bg-white/5 text-gray-400 hover:bg-white/10'
+                      }`}
+                    >
+                      {mod} {!isUnlocked && "🔒"}
+                    </button>
+                  )
+                })}
               </div>
               <p className="text-xs text-gray-500">
                 {selectedModifier === "Double Points" && "All points earned in this round are multiplied by 2x."}
@@ -2089,9 +2292,154 @@ export default function ChaosAlphabetPage() {
                 </div>
               </>
             )}
-
           </div>
         )}
+
+            {/* SHOP SCREEN */}
+            {gameState === "SHOP" && (
+              <div className="w-full max-w-4xl space-y-8 animate-in fade-in zoom-in duration-300">
+                <div className="text-center space-y-2">
+                  <span className="px-3 py-1 bg-purple-500/10 text-purple-400 border border-purple-500/20 text-xs uppercase tracking-widest font-black rounded-full">
+                    PlayLab Store
+                  </span>
+                  <h1 className="text-4xl font-black bg-gradient-to-r from-purple-400 via-indigo-500 to-pink-500 bg-clip-text text-transparent">
+                    Packs & Modifiers Shop
+                  </h1>
+                  <p className="text-sm text-gray-400">Unlock categories and gameplay modifiers using your earned PlayLab Coins.</p>
+                </div>
+
+                {/* Category Packs Grid */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2 border-b border-white/5 pb-2">
+                    <ShoppingBag className="h-5 w-5 text-purple-400" /> Category Packs
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {[
+                      { name: "Culture", cost: 150, desc: "Movies, Books, Music, Celebrities, and TV Shows.", icon: "🎬" },
+                      { name: "Science", cost: 250, desc: "Famous Scientists, Space, Languages, Elements, and Inventions.", icon: "🔬" },
+                      { name: "Geography", cost: 200, desc: "Cities, Rivers, Lakes, Mountain Ranges, and Landmarks.", icon: "🗺️" },
+                      { name: "Mixed", cost: 100, desc: "A blend of basic, culture, and science categories.", icon: "🌀" },
+                      { name: "Friend", cost: 300, desc: "Social categories: Mutual friends, habits, activities, and spots.", icon: "🤝" },
+                      { name: "Family", cost: 300, desc: "Cozy categories: Relatives, traditions, home cooking, and pet peeves.", icon: "🏡" },
+                      { name: "Dating", cost: 400, desc: "Romance categories: Dream date spots, cute pet names, and love traits.", icon: "💖" },
+                      { name: "Study", cost: 250, desc: "Academic categories: Subjects, theorems, library items, and excuses.", icon: "📚" }
+                    ].map(pack => {
+                      const isUnlocked = unlockedPacks.includes(pack.name)
+                      return (
+                        <div key={pack.name} className="glass-panel p-5 rounded-2xl border border-white/5 flex flex-col justify-between space-y-4">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-2xl">{pack.icon}</span>
+                              {isUnlocked && (
+                                <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-green-500/20 text-green-400">Unlocked</span>
+                              )}
+                            </div>
+                            <h4 className="font-bold text-white text-sm">{pack.name} Pack</h4>
+                            <p className="text-xs text-gray-400 leading-normal">{pack.desc}</p>
+                          </div>
+                          <div className="border-t border-white/5 pt-3 flex items-center justify-between">
+                            <span className="text-xs font-mono text-yellow-400 flex items-center gap-1">
+                              <Zap className="h-3 w-3 fill-current text-yellow-400" /> {pack.cost}
+                            </span>
+                            {isUnlocked ? (
+                              <Button disabled className="bg-green-500/10 text-green-400 border border-green-500/20 text-[10px] py-1 px-3">
+                                Owned
+                              </Button>
+                            ) : (
+                              <Button
+                                onClick={() => buyPack(pack.name, pack.cost)}
+                                className="bg-purple-600 hover:bg-purple-500 text-[10px] py-1 px-3 font-bold"
+                              >
+                                Buy Pack
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Modifiers Grid */}
+                <div className="space-y-4 border-t border-white/5 pt-6">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2 border-b border-white/5 pb-2">
+                    <AlertTriangle className="h-5 w-5 text-red-400" /> Chaotic Modifiers
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {[
+                      { name: "Ban Vowels", cost: 200, desc: "Forces players to type words without vowels (A, E, I, O, U) except the first letter.", icon: "🚫" },
+                      { name: "Time Rush", cost: 250, desc: "Cuts the round timer in half to a stressful 30 seconds.", icon: "⏳" },
+                      { name: "Sudden Death", cost: 350, desc: "Making any invalid entry or typing a wrong starting letter ends the match immediately.", icon: "💀" }
+                    ].map(mod => {
+                      const isUnlocked = unlockedModifiers.includes(mod.name)
+                      return (
+                        <div key={mod.name} className="glass-panel p-5 rounded-2xl border border-white/5 flex flex-col justify-between space-y-4">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-2xl">{mod.icon}</span>
+                              {isUnlocked && (
+                                <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-green-500/20 text-green-400">Unlocked</span>
+                              )}
+                            </div>
+                            <h4 className="font-bold text-white text-sm">{mod.name}</h4>
+                            <p className="text-xs text-gray-400 leading-normal">{mod.desc}</p>
+                          </div>
+                          <div className="border-t border-white/5 pt-3 flex items-center justify-between">
+                            <span className="text-xs font-mono text-yellow-400 flex items-center gap-1">
+                              <Zap className="h-3 w-3 fill-current text-yellow-400" /> {mod.cost}
+                            </span>
+                            {isUnlocked ? (
+                              <Button disabled className="bg-green-500/10 text-green-400 border border-green-500/20 text-[10px] py-1 px-3">
+                                Owned
+                              </Button>
+                            ) : (
+                              <Button
+                                onClick={() => buyModifier(mod.name, mod.cost)}
+                                className="bg-red-600 hover:bg-red-500 text-[10px] py-1 px-3 font-bold"
+                              >
+                                Buy Modifier
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* QUESTS LOG SCREEN */}
+            {gameState === "QUESTS" && (
+              <div className="w-full max-w-2xl glass-panel p-6 rounded-3xl border border-white/5 space-y-6 animate-in fade-in duration-300">
+                <div className="border-b border-white/5 pb-3">
+                  <h2 className="text-2xl font-black text-white flex items-center gap-2">
+                    <Trophy className="h-6 w-6 text-yellow-500" /> Arena Quest Log
+                  </h2>
+                  <p className="text-xs text-gray-400">Complete these challenges during game rounds to earn extra PlayLab Coins.</p>
+                </div>
+                <div className="space-y-4">
+                  {activeQuests.map(quest => {
+                    return (
+                      <div key={quest.id} className={`p-4 rounded-xl border flex items-center justify-between ${quest.completed ? 'bg-green-500/5 border-green-500/20' : 'bg-white/5 border-white/5'}`}>
+                        <div>
+                          <h4 className="font-bold text-white text-sm flex items-center gap-2">
+                            {quest.title} {quest.completed && <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">COMPLETE</span>}
+                          </h4>
+                          <p className="text-xs text-gray-400 mt-1">{quest.description}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs font-bold text-yellow-400 flex items-center gap-1 justify-end">
+                            <Zap className="h-3 w-3 fill-current" /> +{quest.reward} Coins
+                          </p>
+                          <p className="text-[10px] text-gray-500 mt-0.5">{quest.completed ? "Rewarded" : "Active Challenge"}</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
       </div>
     </div>
