@@ -41,6 +41,12 @@ export function PushNotificationManager() {
   async function subscribeToPush() {
     setIsSubscribing(true);
     try {
+      // Explicitly request notification permissions first (required by mobile browsers/Safari)
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        throw new Error('Notification permission was not granted.');
+      }
+
       const registration = await navigator.serviceWorker.ready;
       
       const sub = await registration.pushManager.subscribe({

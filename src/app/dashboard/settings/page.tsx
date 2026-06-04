@@ -366,29 +366,20 @@ export default function SettingsPage() {
             <div className="space-y-2 mt-6">
               <label className="text-sm text-gray-400">Push Notifications</label>
               <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                {!isSubscribed && (
-                  <Button 
-                    onClick={handleSyncPush} 
-                    disabled={testingPush}
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground"
-                  >
-                    {testingPush ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                    Enable Notifications
-                  </Button>
-                )}
                 <Button 
                   onClick={handleTestPush} 
                   disabled={testingPush}
                   variant="outline"
                   className="bg-black/50 border border-white/10 text-white hover:bg-white/5"
                 >
-                  Test Push
+                  {testingPush ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Test Push Notification
                 </Button>
               </div>
               <p className="text-xs text-gray-500">
-                {!isSubscribed 
-                  ? 'First click "Enable", then click "Test Push" to verify your device is correctly receiving messages.' 
-                  : 'Your device is successfully registered for native push notifications!'}
+                {isSubscribed 
+                  ? 'Your device is successfully registered for native push notifications! Click "Test Push Notification" to verify.' 
+                  : 'Use the floating setup prompt at the bottom of the dashboard to enable native push notifications, then test here.'}
               </p>
             </div>
           </div>

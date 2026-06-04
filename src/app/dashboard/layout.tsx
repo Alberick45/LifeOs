@@ -7,7 +7,8 @@ import { supabase } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { NotificationCenter } from "@/components/NotificationCenter"
 import { PushNotificationManager } from "@/components/PushNotificationManager"
-import { Sparkles, Users, Calendar, Settings, LogOut, Search, Share2, BarChart2, Globe, Gamepad2 } from "lucide-react"
+import { Sparkles, Users, Calendar, Settings, LogOut, Search, Share2, BarChart2, Globe, Gamepad2, Menu, X } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
 
 export default function DashboardLayout({
   children,
@@ -18,6 +19,7 @@ export default function DashboardLayout({
   const [loading, setLoading] = useState(true)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     const checkUser = async () => {
@@ -120,16 +122,26 @@ export default function DashboardLayout({
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className="h-16 border-b border-white/5 flex items-center justify-between px-6 glass-panel z-10 sticky top-0">
-          <div className="flex items-center bg-white/5 rounded-full px-3 py-1.5 w-64 border border-white/10 focus-within:border-primary/50 transition-colors">
-            <Search className="h-4 w-4 text-gray-400 mr-2" />
-            <input 
-              type="text" 
-              value={searchQuery}
-              onChange={handleSearch}
-              placeholder="Search people..." 
-              className="bg-transparent border-none outline-none text-sm w-full text-white placeholder:text-gray-500"
-            />
+        <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 sm:px-6 glass-panel z-10 sticky top-0">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden text-gray-400 hover:text-white p-0 h-9 w-9"
+              onClick={() => setMobileMenuOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+            <div className="flex items-center bg-white/5 rounded-full px-3 py-1.5 w-40 sm:w-64 border border-white/10 focus-within:border-primary/50 transition-colors">
+              <Search className="h-4 w-4 text-gray-400 mr-2" />
+              <input 
+                type="text" 
+                value={searchQuery}
+                onChange={handleSearch}
+                placeholder="Search people..." 
+                className="bg-transparent border-none outline-none text-sm w-full text-white placeholder:text-gray-500"
+              />
+            </div>
           </div>
           
           <div className="flex items-center gap-4">
@@ -151,6 +163,83 @@ export default function DashboardLayout({
         </div>
       </main>
       <PushNotificationManager />
+
+      {/* Mobile Drawer Overlay */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setMobileMenuOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] md:hidden"
+            />
+            {/* Drawer */}
+            <motion.aside
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", bounce: 0, duration: 0.3 }}
+              className="fixed top-0 bottom-0 left-0 w-64 bg-zinc-950 border-r border-white/10 z-[101] flex flex-col md:hidden"
+            >
+              <div className="p-6 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-6 w-6 text-primary" />
+                  <span className="font-bold text-xl tracking-tight">HumanOS</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-gray-400 hover:text-white"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+
+              <nav className="flex-1 px-4 space-y-2 mt-4">
+                <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors">
+                  <Users className="h-4 w-4" />
+                  People
+                </Link>
+                <Link href="/dashboard/network" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors">
+                  <Share2 className="h-4 w-4" />
+                  Graph
+                </Link>
+                <Link href="/dashboard/analytics" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors">
+                  <BarChart2 className="h-4 w-4" />
+                  Analytics
+                </Link>
+                <Link href="/dashboard/reminders" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors">
+                  <Calendar className="h-4 w-4" />
+                  Reminders
+                </Link>
+                <Link href="/dashboard/connect" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors">
+                  <Globe className="h-4 w-4" />
+                  Connect
+                </Link>
+                <Link href="/dashboard/playlab" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 text-primary/80 hover:text-primary hover:bg-primary/10 transition-colors mt-4 font-medium">
+                  <Gamepad2 className="h-4 w-4" />
+                  PlayLab
+                </Link>
+              </nav>
+
+              <div className="p-4 border-t border-white/5 space-y-1">
+                <Link href="/dashboard/settings" onClick={() => setMobileMenuOpen(false)} className="flex items-center w-full px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
+                  <Settings className="h-4 w-4 mr-2" />
+                  Settings
+                </Link>
+                <Button variant="ghost" className="w-full justify-start text-gray-400 hover:text-white" onClick={() => { setMobileMenuOpen(false); handleSignOut(); }}>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out
+                </Button>
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
