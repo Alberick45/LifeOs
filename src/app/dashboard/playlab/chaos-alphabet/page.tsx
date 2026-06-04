@@ -1365,118 +1365,119 @@ export default function ChaosAlphabetPage() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Solo Play Card */}
-              <button
-                onClick={() => {
-                  setIsMultiplayer(false)
-                  setGameState("SOLO_CONFIG")
-                  setSelectedPack("Basic")
-                }}
-                className="group relative overflow-hidden rounded-2xl border border-yellow-500/20 bg-gradient-to-br from-yellow-500/10 to-orange-500/5 p-6 text-left transition-all hover:scale-[1.02] hover:border-yellow-500/40"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <Bot className="h-8 w-8 text-yellow-400 group-hover:animate-bounce" />
-                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-300">
-                    Solo Play
-                  </span>
-                </div>
-                <h3 className="text-xl font-bold text-white mb-2">▶ Solo Play</h3>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Train your brain against AI bots. Choose your category pack, difficulty level, and modifiers.
-                </p>
-              </button>
-
-              {/* Multiplayer Card */}
-              <button
-                onClick={() => {
-                  setIsMultiplayer(true)
-                  setGameState("MULTIPLAYER_SETUP")
-                }}
-                className="group relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 to-purple-500/5 p-6 text-left transition-all hover:scale-[1.02] hover:border-primary/40"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <Users className="h-8 w-8 text-primary group-hover:animate-pulse" />
-                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-primary/20 text-primary-foreground">
-                    Online Arena
-                  </span>
-                </div>
-                <h3 className="text-xl font-bold text-white mb-2">▶ Multiplayer</h3>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Create room lobbies or join friends in real-time matchups using Supabase-powered sync.
-                </p>
-              </button>
-
-              {/* Tournaments Card */}
-              <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-white/5 p-6 text-left opacity-60 cursor-not-allowed">
-                <div className="flex items-center justify-between mb-4">
-                  <Trophy className="h-8 w-8 text-gray-500" />
-                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-white/10 text-gray-400">
-                    Locked
-                  </span>
-                </div>
-                <h3 className="text-xl font-bold text-gray-300 mb-2">▶ Tournaments</h3>
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  Compete in daily timed challenges and climb the brackets. Season 1 championship starting soon.
-                </p>
-              </div>
-
-              {/* Leaderboard Card */}
-              <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-4">
-                <div className="flex items-center gap-2 border-b border-white/5 pb-2">
-                  <Trophy className="h-5 w-5 text-yellow-500" />
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400">
-                    Local Leaderboard
-                  </h4>
-                </div>
-                {soloLeaderboard.length === 0 ? (
-                  <p className="text-xs text-gray-500 italic py-4 text-center">No local scores recorded yet. Play a Solo game to rank!</p>
-                ) : (
-                  <div className="space-y-2 max-h-[110px] overflow-y-auto pr-1 custom-scrollbar">
-                    {soloLeaderboard.map((entry, index) => (
-                      <div key={index} className="flex justify-between items-center text-xs bg-white/5 p-2 rounded-lg border border-white/5">
-                        <span className="truncate max-w-[120px] font-medium">{index + 1}. {entry.name}</span>
-                        <span className="text-[9px] text-gray-500 uppercase font-bold">{entry.modifier !== "None" ? entry.modifier : ""}</span>
-                        <span className="font-bold text-yellow-400">{entry.score} pts</span>
-                      </div>
-                    ))}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
+              {/* Left panel: Core modes */}
+              <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-6">
+                {/* Solo Play Card */}
+                <button
+                  onClick={() => {
+                    setIsMultiplayer(false)
+                    setGameState("SOLO_CONFIG")
+                    setSelectedPack("Basic")
+                  }}
+                  className="group relative overflow-hidden rounded-2xl border border-yellow-500/20 bg-gradient-to-br from-yellow-500/10 to-orange-500/5 p-6 text-left transition-all hover:scale-[1.02] hover:border-yellow-500/40 flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <Bot className="h-8 w-8 text-yellow-400 group-hover:animate-bounce" />
+                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-300">
+                        Solo Play
+                      </span>
+                    </div>
+                    <h3 className="text-xl font-bold text-white mb-2">▶ Solo Play</h3>
+                    <p className="text-xs text-gray-400 leading-relaxed">
+                      Train your brain against AI bots. Choose your category pack, difficulty level, and modifiers.
+                    </p>
                   </div>
-                )}
+                </button>
+
+                {/* Multiplayer Card */}
+                <button
+                  onClick={() => {
+                    setIsMultiplayer(true)
+                    setGameState("MULTIPLAYER_SETUP")
+                  }}
+                  className="group relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 to-purple-500/5 p-6 text-left transition-all hover:scale-[1.02] hover:border-primary/40 flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <Users className="h-8 w-8 text-primary group-hover:animate-pulse" />
+                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-primary/20 text-primary-foreground">
+                        Online Arena
+                      </span>
+                    </div>
+                    <h3 className="text-xl font-bold text-white mb-2">▶ Multiplayer</h3>
+                    <p className="text-xs text-gray-400 leading-relaxed">
+                      Create room lobbies or join friends in real-time matchups using Supabase-powered sync.
+                    </p>
+                  </div>
+                </button>
               </div>
 
-              {/* Marketplace Card */}
-              <button
-                onClick={() => setGameState("SHOP")}
-                className="group relative overflow-hidden rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-500/10 to-indigo-500/5 p-6 text-left transition-all hover:scale-[1.02] hover:border-purple-500/40"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <ShoppingBag className="h-8 w-8 text-purple-400 group-hover:animate-pulse" />
-                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-purple-500/20 text-purple-300">
-                    Store
-                  </span>
-                </div>
-                <h3 className="text-xl font-bold text-white mb-2">▶ Packs Shop</h3>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Spend PlayLab Coins to unlock new category packs and chaotic modifiers.
-                </p>
-              </button>
+              {/* Right sidebar column: Secondary stacked options */}
+              <div className="flex flex-col gap-3 justify-between">
+                {/* Packs Shop */}
+                <button
+                  onClick={() => setGameState("SHOP")}
+                  className="w-full flex items-center justify-between p-3.5 bg-gradient-to-r from-purple-500/10 to-indigo-500/10 border border-purple-500/20 hover:border-purple-500/40 rounded-xl transition-all text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <ShoppingBag className="h-5 w-5 text-purple-400" />
+                    <div>
+                      <h4 className="text-xs font-bold text-white">Packs Shop</h4>
+                      <p className="text-[10px] text-purple-300">Unlock categories & mods</p>
+                    </div>
+                  </div>
+                </button>
 
-              {/* Quests Card */}
-              <button
-                onClick={() => setGameState("QUESTS")}
-                className="group relative overflow-hidden rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-cyan-500/10 to-teal-500/5 p-6 text-left transition-all hover:scale-[1.02] hover:border-cyan-500/40"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <Trophy className="h-8 w-8 text-cyan-400 group-hover:animate-bounce" />
-                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300">
-                    Rewards
-                  </span>
+                {/* Quest Log */}
+                <button
+                  onClick={() => setGameState("QUESTS")}
+                  className="w-full flex items-center justify-between p-3.5 bg-white/5 border border-white/5 hover:border-cyan-500/30 rounded-xl transition-all text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <Trophy className="h-5 w-5 text-cyan-400" />
+                    <div>
+                      <h4 className="text-xs font-bold text-white">Quest Log</h4>
+                      <p className="text-[10px] text-gray-400">Complete challenges for coins</p>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Local Leaderboard stack item */}
+                <div className="glass-panel p-4 rounded-xl border border-white/5 space-y-3 flex-1 overflow-hidden flex flex-col justify-between">
+                  <div className="flex items-center gap-2 border-b border-white/5 pb-1.5 shrink-0">
+                    <Trophy className="h-4 w-4 text-yellow-500" />
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                      Local Leaderboard
+                    </h4>
+                  </div>
+                  {soloLeaderboard.length === 0 ? (
+                    <p className="text-[10px] text-gray-500 italic py-2 text-center">No local scores yet.</p>
+                  ) : (
+                    <div className="space-y-1.5 overflow-y-auto max-h-[85px] pr-0.5 custom-scrollbar flex-1">
+                      {soloLeaderboard.map((entry, index) => (
+                        <div key={index} className="flex justify-between items-center text-[10px] bg-white/5 p-1.5 rounded-lg border border-white/5">
+                          <span className="truncate max-w-[80px] font-medium">{index + 1}. {entry.name}</span>
+                          <span className="font-bold text-yellow-400">{entry.score}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2">▶ Quest Log</h3>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Complete challenges during game rounds to earn extra PlayLab Coins.
-                </p>
-              </button>
+
+                {/* Tournaments (Locked) */}
+                <div className="w-full flex items-center justify-between p-3 bg-white/5 border border-white/5 opacity-55 rounded-xl text-left cursor-not-allowed">
+                  <div className="flex items-center gap-2">
+                    <Lock className="h-4 w-4 text-gray-500" />
+                    <div>
+                      <h4 className="text-xs font-bold text-gray-400">Tournaments</h4>
+                      <p className="text-[9px] text-gray-500">Season 1 coming soon</p>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
             </div>
           </div>
         )}

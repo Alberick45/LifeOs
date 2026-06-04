@@ -31,10 +31,43 @@ export default function PlayLabPage() {
       id: "memory-hunter",
       title: "Memory Hunter",
       description: "Social deduction and memory quizzes fueled by your HumanOS relationship graph.",
+      icon: <Brain className="h-8 w-8 text-purple-400" />,
+      type: "Hybrid",
+      color: "from-purple-500/20 to-indigo-600/20",
+      borderColor: "border-purple-500/30",
+      href: "/dashboard/playlab/memory-hunter",
+      locked: false
+    },
+    {
+      id: "reverse-hangman",
+      title: "Reverse Hangman Survival",
+      description: "Word puzzle + escalating environmental danger. Decode together or shape the disaster.",
+      icon: <Lock className="h-8 w-8 text-gray-500" />,
+      type: "Hybrid",
+      color: "from-gray-800/40 to-gray-900/40",
+      borderColor: "border-white/5",
+      href: "#",
+      locked: true
+    },
+    {
+      id: "country-war",
+      title: "Country War Builder",
+      description: "Compete with AI nations or friends. Alliances, sanctions, and spy tactics fueled by relationship strength.",
       icon: <Lock className="h-8 w-8 text-gray-500" />,
       type: "Multiplayer",
-      color: "from-gray-800/50 to-gray-900/50",
-      borderColor: "border-white/10",
+      color: "from-gray-800/40 to-gray-900/40",
+      borderColor: "border-white/5",
+      href: "#",
+      locked: true
+    },
+    {
+      id: "creature-forge",
+      title: "Creature Forge",
+      description: "Evolve wings, EMP skins, or acid blood. Draft mutations, trade builds, and raid ecosystems together.",
+      icon: <Lock className="h-8 w-8 text-gray-500" />,
+      type: "Hybrid",
+      color: "from-gray-800/40 to-gray-900/40",
+      borderColor: "border-white/5",
       href: "#",
       locked: true
     }
