@@ -49,11 +49,12 @@ export function PushNotificationManager() {
 
       const registration = await navigator.serviceWorker.ready;
       
+      const rawKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
+      const cleanKey = rawKey.replace(/^"|"$/g, "");
+
       const sub = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(
-          process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!
-        ),
+        applicationServerKey: urlBase64ToUint8Array(cleanKey),
       });
 
       setSubscription(sub);

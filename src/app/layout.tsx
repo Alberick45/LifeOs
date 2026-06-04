@@ -24,13 +24,16 @@ export default function RootLayout({
       <body className="antialiased">
         {children}
         
-        {/* Service Worker Registration */}
         <Script id="pwa-sw" strategy="afterInteractive" dangerouslySetInnerHTML={{
           __html: `
             if ('serviceWorker' in navigator) {
-              window.addEventListener('load', function() {
+              if (document.readyState === 'complete') {
                 navigator.serviceWorker.register('/sw.js');
-              });
+              } else {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/sw.js');
+                });
+              }
             }
           `
         }} />

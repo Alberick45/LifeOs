@@ -960,3 +960,294 @@ HumanOS starts becoming:
 relationship intelligence + social creativity ecosystem + playable social platform.
 
 And that is honestly a much rarer direction than "another chat app."
+
+
+Game: Connection Quest
+Genre
+
+Social / Dating / Friendship / Family
+
+Purpose
+
+Discover how well two or more people know each other.
+
+Works for:
+
+Dating couples
+Friends
+Family
+Coworkers
+Mentors
+Groups
+Core Idea
+
+HumanOS already stores:
+
+Birthdays
+Hobbies
+Likes
+Dislikes
+Goals
+Memories
+Notes
+Milestones
+Relationship history
+
+The game uses this information to generate questions.
+
+Example:
+
+Albert's profile contains:
+
+Favorite animal: Horse
+Dream country: Japan
+Favorite game: FIFA
+Favorite food: Jollof Rice
+
+The game asks Albert's friend:
+
+Which animal does Albert love most?
+
+Choices:
+
+Dog
+Horse
+Lion
+Eagle
+
+Correct answer:
+
+Horse
+
+Knowledge Categories
+About Them
+
+Questions about another person.
+
+Example:
+
+What is Albert's dream travel destination?
+
+About Yourself
+
+Questions about yourself.
+
+Example:
+
+What is your favorite hobby?
+
+The system stores your answer.
+
+Later asks friends.
+
+Checks consistency.
+
+Memory Questions
+
+Generated from interactions.
+
+Example:
+
+Where did you first meet?
+
+What gift did Albert give on your birthday?
+
+What was discussed during your last project?
+
+Prediction Questions
+
+These are powerful.
+
+Example:
+
+Which movie would Albert most likely watch?
+
+Which superpower would Albert choose?
+
+Albert answers privately.
+
+Friend predicts.
+
+Compare.
+
+Dating Mode
+
+Special relationship-focused mode.
+
+Questions like:
+
+What is your partner's biggest current goal?
+
+What stresses them most recently?
+
+What love language do they prefer?
+
+What is their ideal vacation?
+
+What is their favorite memory of the relationship?
+
+Hidden Insight
+
+This mode reveals blind spots.
+
+Example:
+
+Partner A:
+
+I think my biggest goal is starting a business.
+
+Partner B:
+
+I think their biggest goal is traveling.
+
+Mismatch detected.
+
+Interesting conversation starts.
+
+Friend Mode
+
+Focuses on:
+
+Interests
+Shared memories
+Personality
+Humor
+Future plans
+
+Questions:
+
+Which game does Albert enjoy most?
+
+What was your funniest shared memory?
+
+Family Mode
+
+Questions:
+
+What is mum's favorite meal?
+
+What year did dad start his business?
+
+Which sibling is most likely to stay up late?
+
+Could become surprisingly emotional.
+
+Multiplayer Party Mode
+
+3–20 people.
+
+Everyone answers questions about everyone else.
+
+Example:
+
+Question:
+
+What is Sarah's favorite food?
+
+Everyone submits.
+
+Sarah reveals answer.
+
+Points awarded.
+
+Scoring
+
+Not just right/wrong.
+
+Relationship Knowledge Score
+0–20     Stranger
+21–40    Acquainted
+41–60    Familiar
+61–80    Close
+81–95    Deep Connection
+96–100   Soul-Level Knowledge
+
+Separate scores for:
+
+Interests
+Memories
+Personality
+Goals
+Preferences
+Communication
+HumanOS Integration
+
+Each profile gets:
+
+Knowledge Score: 78%
+
+Interests: 95%
+Memories: 64%
+Goals: 42%
+Communication: 88%
+
+Immediately useful.
+
+You know where relationships need attention.
+
+Relationship Growth
+
+Knowledge decays slightly over time.
+
+Why?
+
+People change.
+
+Someone loved FIFA last year.
+
+Now they love chess.
+
+You need to keep learning.
+
+This keeps the game alive.
+
+AI Question Engine
+
+The AI creates questions from:
+
+Profile data
+Timeline entries
+Shared memories
+Notes
+Events
+Previous game sessions
+
+Questions never feel repetitive.
+
+Surprise Mode
+
+The AI asks:
+
+Tell Albert something nobody here knows.
+
+Albert confirms if it's true.
+
+New profile information is created.
+
+The relationship graph becomes richer.
+
+Rewards
+
+Unlock:
+
+Couple badges
+Best Friend badges
+Family Historian badges
+Memory Master badges
+The Secret Feature
+
+After every session:
+
+HumanOS generates:
+
+Relationship Report
+
+Example:
+
+You know Albert's hobbies extremely well but struggle to predict his current goals. Consider asking about future plans and ambitions.
+
+That's where the game becomes more than entertainment.
+
+It becomes a tool for maintaining stronger relationships.
+
+And unlike most dating games, the winner isn't the person with the most points—the winner is the relationship that learns the most.
