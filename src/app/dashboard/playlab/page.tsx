@@ -24,8 +24,8 @@ export default function PlayLabPage() {
       type: "Hybrid",
       color: "from-blue-500/20 to-purple-600/20",
       borderColor: "border-blue-500/30",
-      href: "#",
-      locked: true
+      href: "/dashboard/playlab/wordchemy",
+      locked: false
     },
     {
       id: "memory-hunter",
