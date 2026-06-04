@@ -80,7 +80,11 @@ async function dbGet(userId: string): Promise<Partial<PlaylabProgress> | null> {
     .eq("user_id", userId)
     .maybeSingle()
 
-  if (error || !data) return null
+  if (error) {
+    console.error("Supabase playlab_progress select error:", error)
+    return null
+  }
+  if (!data) return null
   return {
     coins: data.coins ?? DEFAULTS.coins,
     wordchemy_discovered: data.wordchemy_discovered ?? DEFAULTS.wordchemy_discovered,
@@ -91,13 +95,16 @@ async function dbGet(userId: string): Promise<Partial<PlaylabProgress> | null> {
 }
 
 async function dbUpsert(userId: string, patch: Partial<PlaylabProgress>) {
-  await supabase.from("playlab_progress").upsert(
+  const { error } = await supabase.from("playlab_progress").upsert(
     {
       user_id: userId,
       ...patch,
     },
     { onConflict: "user_id" }
   )
+  if (error) {
+    console.error("Supabase playlab_progress upsert error:", error)
+  }
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -139,11 +146,12 @@ export async function loadProgress(
 
 /**
  * Save a partial progress update.
- * Writes to localStorage immediately; debounces Supabase flush by 1.5s.
+ * Writes to localStorage immediately; debounces Supabase flush by 1.5s unless immediate=true.
  */
 export function saveProgress(
   userId: string | null | undefined,
-  patch: Partial<PlaylabProgress>
+  patch: Partial<PlaylabProgress>,
+  immediate = false
 ) {
   // Immediate local write
   lsSet(userId, patch)
@@ -154,14 +162,37 @@ export function saveProgress(
   // Accumulate patches
   _pendingFlush = { ...(_pendingFlush ?? {}), ...patch }
 
+  if (immediate) {
+    if (_flushTimer) clearTimeout(_flushTimer)
+    const toFlush = _pendingFlush
+    _pendingFlush = null
+    dbUpsert(userId, toFlush).catch(err => console.error("Immediate upsert error:", err))
+    return
+  }
+
   // Debounce: flush after 1.5s of inactivity
   if (_flushTimer) clearTimeout(_flushTimer)
   _flushTimer = setTimeout(async () => {
     if (_pendingFlush && userId) {
-      await dbUpsert(userId, _pendingFlush)
+      const toFlush = _pendingFlush
       _pendingFlush = null
+      await dbUpsert(userId, toFlush)
     }
   }, 1500)
+}
+
+/**
+ * Exposes direct saving of high scores to unified JSONB column
+ */
+export function saveHighScore(
+  userId: string | null | undefined,
+  gameId: string,
+  score: number
+) {
+  if (typeof window === "undefined") return
+  const current = lsGet(userId)
+  const highScores = { ...(current.high_scores ?? {}), [gameId]: score }
+  saveProgress(userId, { high_scores: highScores }, true)
 }
 
 // ─── Coin-specific helpers (convenience wrappers) ────────────────────────────
@@ -179,7 +210,7 @@ export function readCoins(userId: string | null | undefined): number {
 
 export function writeCoins(userId: string | null | undefined, amount: number): number {
   const next = Math.max(0, amount)
-  saveProgress(userId, { coins: next })
+  saveProgress(userId, { coins: next }, true)
   return next
 }
 

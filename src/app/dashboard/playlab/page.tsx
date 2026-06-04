@@ -1,9 +1,42 @@
 "use client"
 
-import { Gamepad2, Brain, Zap, ArrowRight, Lock } from "lucide-react"
+import { useState } from "react"
+import { Gamepad2, Brain, Zap, ArrowRight, Lock, RotateCcw, Globe, Sword, Sparkles, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 
+// All game-specific localStorage keys to wipe on reset
+const PLAYLAB_LS_KEYS = [
+  "wordchemy_discovered",
+  "wordchemy_packs",
+  "reverse_hangman_leaderboard",
+  "playlab_coins_local",
+  "playlab_progress_local",
+]
+function clearPlaylabData(userId?: string | null) {
+  PLAYLAB_LS_KEYS.forEach(k => localStorage.removeItem(k))
+  if (userId) {
+    ;[
+      `playlab_coins_${userId}`,
+      `playlab_progress_${userId}`,
+      `reverse_hangman_score_${userId}`,
+      `reverse_hangman_envs_${userId}`,
+      `chaos_alphabet_score_${userId}`,
+      `memory_hunter_score_${userId}`,
+    ].forEach(k => localStorage.removeItem(k))
+  }
+}
+
 export default function PlayLabPage() {
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [resetDone, setResetDone] = useState(false)
+
+  const handleReset = () => {
+    clearPlaylabData()
+    setShowResetConfirm(false)
+    setResetDone(true)
+    setTimeout(() => setResetDone(false), 3000)
+  }
+
   const games = [
     {
       id: "chaos-alphabet",
@@ -52,19 +85,19 @@ export default function PlayLabPage() {
     {
       id: "country-war",
       title: "Country War Builder",
-      description: "Compete with AI nations or friends. Alliances, sanctions, and spy tactics fueled by relationship strength.",
-      icon: <Lock className="h-8 w-8 text-gray-500" />,
+      description: "Compete with AI nations or friends. Build armies, form alliances, launch trade wars and spy missions fueled by relationship strength.",
+      icon: <Globe className="h-8 w-8 text-green-400" />,
       type: "Multiplayer",
-      color: "from-gray-800/40 to-gray-900/40",
-      borderColor: "border-white/5",
-      href: "#",
-      locked: true
+      color: "from-green-950/40 to-emerald-900/20",
+      borderColor: "border-green-500/30",
+      href: "/dashboard/playlab/country-war",
+      locked: false
     },
     {
       id: "creature-forge",
       title: "Creature Forge",
       description: "Evolve wings, EMP skins, or acid blood. Draft mutations, trade builds, and raid ecosystems together.",
-      icon: <Lock className="h-8 w-8 text-gray-500" />,
+      icon: <Sparkles className="h-8 w-8 text-gray-500" />,
       type: "Hybrid",
       color: "from-gray-800/40 to-gray-900/40",
       borderColor: "border-white/5",
@@ -75,43 +108,82 @@ export default function PlayLabPage() {
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto">
-      <div className="flex items-center gap-3">
-        <div className="p-3 bg-primary/20 rounded-xl">
-          <Gamepad2 className="h-8 w-8 text-primary" />
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-primary/20 rounded-xl">
+            <Gamepad2 className="h-8 w-8 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">PlayLab</h1>
+            <p className="text-gray-400">Social experiences powered by relationship intelligence</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">PlayLab</h1>
-          <p className="text-gray-400">Social experiences powered by relationship intelligence</p>
+
+        {/* Reset Button */}
+        <div className="relative">
+          {!showResetConfirm ? (
+            <button
+              onClick={() => setShowResetConfirm(true)}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-gray-400 text-xs hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400 transition-all"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reset Game Data
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-xs">
+              <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
+              <span className="text-red-300">Clear all local progress?</span>
+              <button onClick={handleReset} className="px-2 py-0.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition-all">Yes</button>
+              <button onClick={() => setShowResetConfirm(false)} className="px-2 py-0.5 bg-white/10 text-gray-300 rounded-lg hover:bg-white/20 transition-all">Cancel</button>
+            </div>
+          )}
+          {resetDone && (
+            <div className="absolute -bottom-8 right-0 text-[10px] text-green-400 font-bold whitespace-nowrap">
+              ✓ Game data cleared! Fresh start ready.
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Game Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {games.map(game => (
-          <Link 
-            key={game.id} 
+          <Link
+            key={game.id}
             href={game.locked ? "#" : game.href}
-            className={`group relative overflow-hidden rounded-2xl border ${game.borderColor} bg-gradient-to-br ${game.color} p-6 transition-all hover:scale-[1.02] ${game.locked ? 'opacity-70 cursor-not-allowed' : ''}`}
+            className={`group relative overflow-hidden rounded-2xl border ${game.borderColor} bg-gradient-to-br ${game.color} p-6 transition-all hover:scale-[1.02] ${game.locked ? "opacity-60 cursor-not-allowed" : "hover:shadow-lg"}`}
           >
             <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] -z-10" />
-            
+
             <div className="flex items-start justify-between mb-4">
               {game.icon}
-              <span className={`text-xs font-bold uppercase px-2 py-1 rounded-full ${game.locked ? 'bg-gray-800 text-gray-400' : 'bg-white/10 text-white'}`}>
-                {game.locked ? "IN DEVELOPMENT" : game.type}
+              <span className={`text-xs font-bold uppercase px-2 py-1 rounded-full ${game.locked ? "bg-gray-800 text-gray-400" : "bg-white/10 text-white"}`}>
+                {game.locked ? "COMING SOON" : game.type}
               </span>
             </div>
-            
+
             <h3 className="text-xl font-bold text-white mb-2">{game.title}</h3>
             <p className="text-sm text-gray-300 mb-6">{game.description}</p>
-            
+
             {!game.locked && (
               <div className="flex items-center text-primary font-medium text-sm group-hover:translate-x-1 transition-transform">
                 Launch Experience <ArrowRight className="h-4 w-4 ml-1" />
               </div>
             )}
+            {game.locked && (
+              <div className="flex items-center text-gray-500 text-xs font-bold gap-1">
+                <Lock className="h-3.5 w-3.5" /> In Development
+              </div>
+            )}
           </Link>
         ))}
       </div>
+
+      <p className="text-center text-[10px] text-gray-600 pt-2">
+        💡 Having coin issues? Use <strong>Reset Game Data</strong> above to clear local conflicts, then reload.
+      </p>
     </div>
   )
 }

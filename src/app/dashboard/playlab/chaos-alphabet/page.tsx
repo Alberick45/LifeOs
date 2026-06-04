@@ -5,6 +5,7 @@ import { Timer, Trophy, Play, ArrowLeft, RefreshCw, Sparkles, AlertTriangle, Use
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase/client"
+import { readCoins, adjustCoins, onCoinsChange, loadProgress, saveProgress, saveHighScore } from "@/lib/playlab-coins"
 
 type GameState = "MENU" | "SOLO_CONFIG" | "MULTIPLAYER_SETUP" | "MULTIPLAYER_LOBBY" | "COUNTDOWN" | "PLAYING" | "RESULTS" | "SHOP" | "QUESTS"
 type Difficulty = "Beginner" | "Easy" | "Normal" | "Hard" | "Expert" | "Master"
@@ -532,28 +533,18 @@ export default function ChaosAlphabetPage() {
   const awardCoins = (amount: number, customId?: string | null) => {
     if (amount <= 0) return
     const activeId = customId !== undefined ? customId : userId
-    const coinKey = activeId ? `playlab_coins_${activeId}` : "playlab_coins_local"
-    setCoins(prev => {
-      const next = prev + amount
-      localStorage.setItem(coinKey, next.toString())
-      return next
-    })
+    const next = adjustCoins(activeId, amount)
+    setCoins(next)
     triggerAlert(`Earned +${amount} PlayLab Coins!`, true)
   }
 
   const spendCoins = (amount: number): boolean => {
-    const coinKey = userId ? `playlab_coins_${userId}` : "playlab_coins_local"
-    let success = false
-    setCoins(prev => {
-      if (prev >= amount) {
-        const next = prev - amount
-        localStorage.setItem(coinKey, next.toString())
-        success = true
-        return next
-      }
-      return prev
-    })
-    return success
+    if (coins >= amount) {
+      const next = adjustCoins(userId, -amount)
+      setCoins(next)
+      return true
+    }
+    return false
   }
 
   const buyPack = (packName: string, cost: number) => {
@@ -613,11 +604,13 @@ export default function ChaosAlphabetPage() {
 
   // Load auth username and local leaderboards on mount
   useEffect(() => {
+    let resolvedUserId: string | null = null
+    let unsubCoins: (() => void) | null = null
+
     const fetchUser = async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      let currentUserId = null
       if (session?.user) {
-        currentUserId = session.user.id
+        resolvedUserId = session.user.id
         setUserId(session.user.id)
         if (session.user.user_metadata?.full_name) {
           setUsername(session.user.user_metadata.full_name)
@@ -626,17 +619,12 @@ export default function ChaosAlphabetPage() {
         }
       }
 
-      if (typeof window !== "undefined") {
-        const coinKey = currentUserId ? `playlab_coins_${currentUserId}` : "playlab_coins_local"
-        const savedCoins = localStorage.getItem(coinKey)
-        if (savedCoins) {
-          setCoins(parseInt(savedCoins) || 0)
-        } else {
-          setCoins(100)
-          localStorage.setItem(coinKey, "100")
-        }
+      // Load progress
+      const progress = await loadProgress(resolvedUserId)
+      setCoins(progress.coins)
 
-        const packKey = currentUserId ? `chaos_packs_${currentUserId}` : "chaos_packs_local"
+      if (typeof window !== "undefined") {
+        const packKey = resolvedUserId ? `chaos_packs_${resolvedUserId}` : "chaos_packs_local"
         const savedPacks = localStorage.getItem(packKey)
         if (savedPacks) {
           try {
@@ -644,7 +632,7 @@ export default function ChaosAlphabetPage() {
           } catch(e) {}
         }
 
-        const modKey = currentUserId ? `chaos_mods_${currentUserId}` : "chaos_mods_local"
+        const modKey = resolvedUserId ? `chaos_mods_${resolvedUserId}` : "chaos_mods_local"
         const savedMods = localStorage.getItem(modKey)
         if (savedMods) {
           try {
@@ -652,7 +640,7 @@ export default function ChaosAlphabetPage() {
           } catch(e) {}
         }
 
-        const questKey = currentUserId ? `chaos_quests_${currentUserId}` : "chaos_quests_local"
+        const questKey = resolvedUserId ? `chaos_quests_${resolvedUserId}` : "chaos_quests_local"
         const savedQuests = localStorage.getItem(questKey)
         if (savedQuests) {
           try {
@@ -660,6 +648,9 @@ export default function ChaosAlphabetPage() {
           } catch(e) {}
         }
       }
+
+      // Subscribe to coin updates dynamically
+      unsubCoins = onCoinsChange(resolvedUserId, (newBal) => setCoins(newBal))
     }
     fetchUser()
 
@@ -675,6 +666,7 @@ export default function ChaosAlphabetPage() {
     }
 
     return () => {
+      if (unsubCoins) unsubCoins()
       if (channelRef.current) {
         channelRef.current.unsubscribe()
       }
@@ -704,6 +696,12 @@ export default function ChaosAlphabetPage() {
       .slice(0, 10)
     setSoloLeaderboard(updated)
     localStorage.setItem("chaos_alphabet_leaderboard", JSON.stringify(updated))
+    
+    // Save high score to unified high_scores table in Supabase
+    const highestScore = updated[0]?.score || 0
+    if (highestScore > 0) {
+      saveHighScore(userId, "chaos_alphabet", highestScore)
+    }
   }
 
   const joinLobby = (code: string, amHost: boolean) => {

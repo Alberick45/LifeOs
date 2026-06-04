@@ -5,6 +5,7 @@ import { Trophy, Play, ArrowLeft, AlertTriangle, Bot, Zap, Star, ShieldAlert, Ch
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase/client"
+import { readCoins, adjustCoins, onCoinsChange, loadProgress, saveProgress, saveHighScore } from "@/lib/playlab-coins"
 
 type GameState = "MENU" | "SOLO_PLAY" | "DM_PLAY" | "RESULTS"
 type Difficulty = "Beginner" | "Normal" | "Expert"
@@ -308,28 +309,38 @@ export default function ReverseHangmanPage() {
 
   // Load persisted data
   useEffect(() => {
-    async function loadUser() {
-      const { data: { user } } = await supabase.auth.getUser()
-      const uId = user ? user.id : "local"
-      setUserId(uId)
-      const coinsRaw = localStorage.getItem(`playlab_coins_${uId}`)
-      setCoins(coinsRaw ? parseInt(coinsRaw) : 250)
-      const scoreRaw = localStorage.getItem(`reverse_hangman_score_${uId}`)
-      if (scoreRaw) setHighScore(parseInt(scoreRaw))
-      const envRaw = localStorage.getItem(`reverse_hangman_envs_${uId}`)
-      if (envRaw) setUnlockedEnvironments(JSON.parse(envRaw))
+    let resolvedUserId: string | null = null
+    let unsubCoins: (() => void) | null = null
+
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        resolvedUserId = session.user.id
+        setUserId(session.user.id)
+      }
+
+      // Load progress from Supabase + localStorage
+      const progress = await loadProgress(resolvedUserId)
+      setCoins(progress.coins)
+      setHighScore(progress.high_scores?.reverse_hangman ?? 0)
+      setUnlockedEnvironments(progress.rh_unlocked_envs ?? ["volcano", "submarine"])
+
       const lbRaw = localStorage.getItem("reverse_hangman_leaderboard")
       if (lbRaw) setLeaderboard(JSON.parse(lbRaw))
+
+      // Subscribe to coin updates using the resolved user ID
+      unsubCoins = onCoinsChange(resolvedUserId, (newBal) => setCoins(newBal))
     }
-    loadUser()
+    init()
+
+    return () => {
+      if (unsubCoins) unsubCoins()
+    }
   }, [])
 
-  const updateCoins = useCallback((amount: number, uId = userId) => {
-    setCoins(prev => {
-      const next = Math.max(0, prev + amount)
-      localStorage.setItem(`playlab_coins_${uId}`, next.toString())
-      return next
-    })
+  const updateCoins = useCallback((amount: number) => {
+    const next = adjustCoins(userId, amount)
+    setCoins(next)
   }, [userId])
 
   const triggerShake = () => {
@@ -385,7 +396,7 @@ export default function ReverseHangmanPage() {
       updateCoins(earnedCoins)
       if (score > highScore) {
         setHighScore(score)
-        localStorage.setItem(`reverse_hangman_score_${userId}`, score.toString())
+        saveHighScore(userId, "reverse_hangman", score)
       }
       const newEntry: LeaderboardEntry = {
         name: "You",
@@ -456,7 +467,7 @@ export default function ReverseHangmanPage() {
       updateCoins(-200)
       const updated = [...unlockedEnvironments, "space"]
       setUnlockedEnvironments(updated)
-      localStorage.setItem(`reverse_hangman_envs_${userId}`, JSON.stringify(updated))
+      saveProgress(userId, { rh_unlocked_envs: updated }, true)
     }
   }
 

@@ -5,6 +5,7 @@ import { Timer, Trophy, Play, ArrowLeft, RefreshCw, Sparkles, AlertTriangle, Use
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase/client"
+import { readCoins, adjustCoins, onCoinsChange, loadProgress, saveProgress, saveHighScore } from "@/lib/playlab-coins"
 
 type GameState = "MENU" | "GRID_PLAY" | "QUIZ_PLAY" | "SCORE_REPORT"
 type Difficulty = "Beginner" | "Normal" | "Expert"
@@ -72,23 +73,21 @@ export default function MemoryHunterPage() {
   }
 
   const awardCoins = (amount: number) => {
-    const coinKey = userId ? `playlab_coins_${userId}` : "playlab_coins_local"
-    setCoins(prev => {
-      const next = prev + amount
-      localStorage.setItem(coinKey, next.toString())
-      return next
-    })
+    const next = adjustCoins(userId, amount)
+    setCoins(next)
     triggerAlert(`Earned +${amount} PlayLab Coins!`, true)
   }
 
   // Initial Auth & Coins setup
   useEffect(() => {
+    let resolvedUserId: string | null = null
+    let unsubCoins: (() => void) | null = null
+
     const initSession = async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      let currentUserId = null
       if (session?.user) {
-        currentUserId = session.user.id
-        setUserId(currentUserId)
+        resolvedUserId = session.user.id
+        setUserId(session.user.id)
         if (session.user.user_metadata?.full_name) {
           setUsername(session.user.user_metadata.full_name)
         } else if (session.user.email) {
@@ -96,21 +95,10 @@ export default function MemoryHunterPage() {
         }
       }
 
-      if (typeof window !== "undefined") {
-        const coinKey = currentUserId ? `playlab_coins_${currentUserId}` : "playlab_coins_local"
-        const savedCoins = localStorage.getItem(coinKey)
-        if (savedCoins) {
-          setCoins(parseInt(savedCoins) || 0)
-        } else {
-          setCoins(100)
-          localStorage.setItem(coinKey, "100")
-        }
-
-        const savedGridHigh = localStorage.getItem(currentUserId ? `mh_high_${currentUserId}` : "mh_high_local")
-        if (savedGridHigh) {
-          setGridHighScore(parseInt(savedGridHigh) || 0)
-        }
-      }
+      // Load progress
+      const progress = await loadProgress(resolvedUserId)
+      setCoins(progress.coins)
+      setGridHighScore(progress.high_scores?.memory_hunter ?? 0)
 
       // Query local database for people profiles
       try {
@@ -127,8 +115,15 @@ export default function MemoryHunterPage() {
       } catch (err) {
         console.error("Error loading people profiles:", err)
       }
+
+      // Subscribe to coin updates dynamically
+      unsubCoins = onCoinsChange(resolvedUserId, (newBal) => setCoins(newBal))
     }
     initSession()
+
+    return () => {
+      if (unsubCoins) unsubCoins()
+    }
   }, [])
 
   // Adapt grid size based on difficulty
@@ -197,8 +192,7 @@ export default function MemoryHunterPage() {
           // Update high scores
           if (gridStreak > gridHighScore) {
             setGridHighScore(gridStreak)
-            const highKey = userId ? `mh_high_${userId}` : "mh_high_local"
-            localStorage.setItem(highKey, gridStreak.toString())
+            saveHighScore(userId, "memory_hunter", gridStreak)
             triggerAlert(`New High Score: ${gridStreak} rounds!`, true)
           }
 
