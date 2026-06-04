@@ -721,6 +721,9 @@ export default function ChaosAlphabetPage() {
         presence: {
           key: myPresId,
         },
+        broadcast: {
+          self: true,
+        },
       },
     })
 

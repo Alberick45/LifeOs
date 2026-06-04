@@ -116,7 +116,25 @@ async function dbUpsert(userId: string, patch: Partial<PlaylabProgress>) {
 export async function loadProgress(
   userId: string | null | undefined
 ): Promise<PlaylabProgress> {
-  const local = lsGet(userId)
+  let local = lsGet(userId)
+
+  // Migration logic: If we have a logged-in user, but their user-specific local storage is empty,
+  // we check if there's any progress under the 'local' guest key and migrate it.
+  if (userId && userId !== "local" && typeof window !== "undefined") {
+    const localIsEmpty = !local.coins && (!local.high_scores || Object.keys(local.high_scores).length === 0)
+    if (localIsEmpty) {
+      const guest = lsGet("local")
+      const hasGuestProgress = (guest.coins !== undefined && guest.coins !== 100) || (guest.high_scores && Object.keys(guest.high_scores).length > 0)
+      if (hasGuestProgress) {
+        local = { ...local, ...guest }
+        lsSet(userId, local)
+        // Clean up guest local storage so we don't migrate again
+        localStorage.removeItem("playlab_progress_local")
+        localStorage.removeItem("playlab_coins_local")
+      }
+    }
+  }
+
   let merged: PlaylabProgress = { ...DEFAULTS, ...local }
 
   if (userId && userId !== "local") {
@@ -138,6 +156,9 @@ export async function loadProgress(
       }
       // Sync back merged to localStorage
       lsSet(userId, merged)
+    } else {
+      // If there's no remote record yet, write the merged/migrated local progress to Supabase
+      await dbUpsert(userId, merged)
     }
   }
 

@@ -332,6 +332,7 @@ export default function CountryWarPage() {
       setGold(newGold); setFood(newFood); setMilitary(newMilitary); setInfluence(newInfluence); setHp(0); setScore(newScore)
       setVictoryType("defeat")
       setPhase("RESULTS")
+      saveResult(newScore)
       return
     }
 
@@ -412,6 +413,9 @@ export default function CountryWarPage() {
       config: {
         presence: {
           key: myPresId,
+        },
+        broadcast: {
+          self: true,
         },
       },
     })

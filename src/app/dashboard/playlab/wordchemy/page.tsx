@@ -522,6 +522,9 @@ export default function WordchemyPage() {
         presence: {
           key: myPresId,
         },
+        broadcast: {
+          self: true,
+        },
       },
     })
 

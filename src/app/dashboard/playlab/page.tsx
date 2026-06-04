@@ -97,12 +97,12 @@ export default function PlayLabPage() {
       id: "creature-forge",
       title: "Creature Forge",
       description: "Evolve wings, EMP skins, or acid blood. Draft mutations, trade builds, and raid ecosystems together.",
-      icon: <Sparkles className="h-8 w-8 text-gray-500" />,
+      icon: <Sparkles className="h-8 w-8 text-emerald-400" />,
       type: "Hybrid",
-      color: "from-gray-800/40 to-gray-900/40",
-      borderColor: "border-white/5",
-      href: "#",
-      locked: true
+      color: "from-emerald-950/40 to-emerald-900/20",
+      borderColor: "border-emerald-500/30",
+      href: "/dashboard/playlab/creature-forge",
+      locked: false
     }
   ]
 
