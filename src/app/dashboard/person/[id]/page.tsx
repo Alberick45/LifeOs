@@ -225,6 +225,9 @@ export default function PersonProfilePage() {
 
         if (!pError) {
           setPerson({ ...person, strength_score: newStrength, trust_score: newTrust })
+          if (typeof window !== "undefined") {
+            localStorage.removeItem("lifeos_people_cache")
+          }
         }
       }
 
@@ -260,6 +263,9 @@ export default function PersonProfilePage() {
 
       if (error) throw error
       
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("lifeos_people_cache")
+      }
       setPerson(prev => prev ? { ...prev, ...editData } : null)
       setIsEditing(false)
     } catch (error) {

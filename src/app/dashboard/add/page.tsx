@@ -43,6 +43,9 @@ export default function AddPersonPage() {
       ])
 
       if (error) throw error
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("lifeos_people_cache")
+      }
       router.push("/dashboard")
       router.refresh()
     } catch (error) {

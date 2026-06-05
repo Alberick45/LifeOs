@@ -28,6 +28,19 @@ function DashboardContent() {
   const q = searchParams.get('q')
 
   useEffect(() => {
+    // Load from cache first for instant rendering
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem("lifeos_people_cache")
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached)
+          setPeople(parsed)
+          setLoading(false)
+        } catch (e) {
+          console.error("Failed to parse cached people:", e)
+        }
+      }
+    }
     fetchPeople()
   }, [])
 
@@ -43,7 +56,11 @@ function DashboardContent() {
         .order('created_at', { ascending: false })
       
       if (error) throw error
-      setPeople(data || [])
+      const freshPeople = data || []
+      setPeople(freshPeople)
+      if (typeof window !== "undefined") {
+        localStorage.setItem("lifeos_people_cache", JSON.stringify(freshPeople))
+      }
     } catch (error) {
       console.error("Error fetching people:", error)
     } finally {
@@ -62,7 +79,11 @@ function DashboardContent() {
 
     const newState = !currentState
     
-    setPeople(people.map(p => p.id === personId ? { ...p, is_archived: newState } : p))
+    const updated = people.map(p => p.id === personId ? { ...p, is_archived: newState } : p)
+    setPeople(updated)
+    if (typeof window !== "undefined") {
+      localStorage.setItem("lifeos_people_cache", JSON.stringify(updated))
+    }
     
     try {
       await supabase
@@ -72,7 +93,11 @@ function DashboardContent() {
     } catch (err) {
       console.error("Failed to toggle archive state", err)
       // revert on failure
-      setPeople(people.map(p => p.id === personId ? { ...p, is_archived: currentState } : p))
+      const reverted = people.map(p => p.id === personId ? { ...p, is_archived: currentState } : p)
+      setPeople(reverted)
+      if (typeof window !== "undefined") {
+        localStorage.setItem("lifeos_people_cache", JSON.stringify(reverted))
+      }
     }
   }
 

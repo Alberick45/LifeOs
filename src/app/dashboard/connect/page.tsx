@@ -207,6 +207,31 @@ export default function ConnectPage() {
             user_b: senderId,
             relationship_type: 'Unknown'
           })
+
+        // Find the sender profile details from the incoming requests state
+        const req = incomingRequests.find(r => r.id === requestId)
+        const senderProfile = req?.profiles
+
+        // Check if this person is already in the receiver's network
+        const { data: existingPerson } = await supabase
+          .from('people')
+          .select('id')
+          .eq('user_id', sessionUser.id)
+          .eq('linked_user_id', senderId)
+          .maybeSingle()
+
+        if (!existingPerson) {
+          // Add them to the people list of the accepting user
+          await supabase
+            .from('people')
+            .insert({
+              user_id: sessionUser.id,
+              name: senderProfile?.handle ? `@${senderProfile.handle}` : 'New Connection',
+              photo: senderProfile?.avatar_url || null,
+              linked_user_id: senderId,
+              relationship_type: 'Friend'
+            })
+        }
       }
 
       fetchRequests(sessionUser.id)
