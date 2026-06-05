@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Plus, User, Heart, ShieldAlert, Loader2, Archive, ArchiveRestore } from "lucide-react"
+import { Plus, User, Heart, ShieldAlert, Loader2, Archive, ArchiveRestore, Globe } from "lucide-react"
 import { motion } from "framer-motion"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
@@ -18,6 +18,8 @@ type Person = {
   trust_score: number
   photo: string | null
   is_archived: boolean
+  linked_user_id?: string | null
+  handle?: string | null
 }
 
 function DashboardContent() {
@@ -57,9 +59,18 @@ function DashboardContent() {
       
       if (error) throw error
       let freshPeople = data || []
-      setPeople(freshPeople)
-      if (typeof window !== "undefined") {
-        localStorage.setItem("lifeos_people_cache", JSON.stringify(freshPeople))
+
+      // Load verified profiles map for handles
+      const linkedUserIds = freshPeople.map(p => p.linked_user_id).filter(Boolean)
+      const profileMap = new Map()
+      if (linkedUserIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, handle')
+          .in('id', linkedUserIds)
+        if (profiles) {
+          profiles.forEach(pr => profileMap.set(pr.id, pr.handle))
+        }
       }
 
       // Self-healing check: ensure all verified links have a corresponding person record
@@ -87,6 +98,8 @@ function DashboardContent() {
             .in('id', missingUserIds)
 
           if (profiles && profiles.length > 0) {
+            profiles.forEach(pr => profileMap.set(pr.id, pr.handle))
+
             const newPeopleInserts = profiles.map(profile => ({
               user_id: user.id,
               name: profile.handle ? `@${profile.handle}` : 'New Connection',
@@ -102,13 +115,20 @@ function DashboardContent() {
 
             if (insertedPeople && insertedPeople.length > 0) {
               freshPeople = [...insertedPeople, ...freshPeople]
-              setPeople(freshPeople)
-              if (typeof window !== "undefined") {
-                localStorage.setItem("lifeos_people_cache", JSON.stringify(freshPeople))
-              }
             }
           }
         }
+      }
+
+      // Map handles to final state
+      freshPeople = freshPeople.map(p => ({
+        ...p,
+        handle: p.linked_user_id ? profileMap.get(p.linked_user_id) || null : null
+      }))
+
+      setPeople(freshPeople)
+      if (typeof window !== "undefined") {
+        localStorage.setItem("lifeos_people_cache", JSON.stringify(freshPeople))
       }
     } catch (error) {
       console.error("Error fetching people:", error)
@@ -214,10 +234,10 @@ function DashboardContent() {
               transition={{ delay: i * 0.1 }}
             >
               <Link href={`/dashboard/person/${person.id}`} className="block h-full">
-                <Card className="hover:bg-white/5 transition-colors cursor-pointer group h-full">
+                <Card className={`hover:bg-white/5 transition-colors cursor-pointer group h-full ${person.linked_user_id ? 'border-purple-500/20 bg-purple-950/5 hover:bg-purple-950/10 shadow-[0_0_15px_rgba(168,85,247,0.05)]' : ''}`}>
                   <CardContent className="p-6">
                     <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-4 flex-wrap">
                         <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary/20 to-blue-500/20 border border-white/10 flex items-center justify-center overflow-hidden">
                           {person.photo ? (
                             <img src={person.photo} alt={person.name} className="h-full w-full object-cover" />
@@ -226,10 +246,24 @@ function DashboardContent() {
                           )}
                         </div>
                         <div>
-                          <h3 className="font-semibold text-lg">{person.name}</h3>
-                          <span className="text-xs px-2 py-1 rounded-full bg-white/10 text-gray-300 capitalize">
-                            {person.relationship_type || "Connection"}
-                          </span>
+                          <h3 className="font-semibold text-lg flex items-center gap-1.5 flex-wrap">
+                            {person.name}
+                            {person.linked_user_id && person.handle && (
+                              <span className="text-xs text-purple-400 font-normal">
+                                (@{person.handle})
+                              </span>
+                            )}
+                          </h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-gray-300 capitalize">
+                              {person.relationship_type || "Connection"}
+                            </span>
+                            {person.linked_user_id && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-0.5 font-semibold">
+                                <Globe className="h-2.5 w-2.5 text-purple-400" /> Linked
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <button 

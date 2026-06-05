@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Plus, MessageCircle, Heart, ShieldAlert, Phone, Coffee, Gift, MessageSquare, Edit, X, Calendar, Sparkles, Loader2, Copy, Tag, Mail, MapPin, Network } from "lucide-react"
+import { ArrowLeft, Plus, MessageCircle, Heart, ShieldAlert, Phone, Coffee, Gift, MessageSquare, Edit, X, Calendar, Sparkles, Loader2, Copy, Tag, Mail, MapPin, Network, Globe } from "lucide-react"
 import Link from "next/link"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
@@ -22,6 +22,8 @@ type Person = {
   photo: string | null
   pronouns: string | null
   is_archived: boolean
+  linked_user_id?: string | null
+  handle?: string | null
 }
 
 type Interaction = {
@@ -111,7 +113,19 @@ export default function PersonProfilePage() {
         .single()
       
       if (pError) throw pError
-      setPerson(pData)
+      
+      let resolvedPerson = pData
+      if (pData.linked_user_id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('handle')
+          .eq('id', pData.linked_user_id)
+          .maybeSingle()
+        if (profile) {
+          resolvedPerson = { ...pData, handle: profile.handle }
+        }
+      }
+      setPerson(resolvedPerson)
       setEditData({
         name: pData.name || '',
         relationship_type: pData.relationship_type || '',
@@ -478,6 +492,11 @@ export default function PersonProfilePage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <h1 className="text-3xl font-bold tracking-tight">{person.name}</h1>
+                {person.handle && (
+                  <span className="text-sm px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1 font-semibold">
+                    <Globe className="h-3.5 w-3.5 text-purple-400" /> @{person.handle}
+                  </span>
+                )}
                 <button onClick={() => setIsEditing(true)} className="p-1.5 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors" title="Edit Profile">
                   <Edit className="h-4 w-4" />
                 </button>
