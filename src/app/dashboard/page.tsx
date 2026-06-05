@@ -56,10 +56,59 @@ function DashboardContent() {
         .order('created_at', { ascending: false })
       
       if (error) throw error
-      const freshPeople = data || []
+      let freshPeople = data || []
       setPeople(freshPeople)
       if (typeof window !== "undefined") {
         localStorage.setItem("lifeos_people_cache", JSON.stringify(freshPeople))
+      }
+
+      // Self-healing check: ensure all verified links have a corresponding person record
+      const { data: verified } = await supabase
+        .from('verified_links')
+        .select('*')
+        .or(`user_a.eq.${user.id},user_b.eq.${user.id}`)
+
+      if (verified && verified.length > 0) {
+        const linkedUserIdsInPeople = new Set(
+          freshPeople
+            .map(p => p.linked_user_id)
+            .filter(Boolean)
+        )
+
+        const missingUserIds = verified
+          .map(v => (v.user_a === user.id ? v.user_b : v.user_a))
+          .filter(id => !linkedUserIdsInPeople.has(id))
+
+        if (missingUserIds.length > 0) {
+          // Fetch profiles for the missing users
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, handle, avatar_url')
+            .in('id', missingUserIds)
+
+          if (profiles && profiles.length > 0) {
+            const newPeopleInserts = profiles.map(profile => ({
+              user_id: user.id,
+              name: profile.handle ? `@${profile.handle}` : 'New Connection',
+              photo: profile.avatar_url || null,
+              linked_user_id: profile.id,
+              relationship_type: 'Friend'
+            }))
+
+            const { data: insertedPeople } = await supabase
+              .from('people')
+              .insert(newPeopleInserts)
+              .select()
+
+            if (insertedPeople && insertedPeople.length > 0) {
+              freshPeople = [...insertedPeople, ...freshPeople]
+              setPeople(freshPeople)
+              if (typeof window !== "undefined") {
+                localStorage.setItem("lifeos_people_cache", JSON.stringify(freshPeople))
+              }
+            }
+          }
+        }
       }
     } catch (error) {
       console.error("Error fetching people:", error)
