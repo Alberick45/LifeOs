@@ -94,14 +94,14 @@ export default function PlayLabPage() {
       locked: false
     },
     {
-      id: "creature-forge",
-      title: "Creature Forge",
-      description: "Evolve wings, EMP skins, or acid blood. Draft mutations, trade builds, and raid ecosystems together.",
+      id: "secret-card-hunt",
+      title: "Secret Card Hunt",
+      description: "A social deduction and knowledge game. Ask questions, analyze responses, and deduce your opponents' cards before they find yours.",
       icon: <Sparkles className="h-8 w-8 text-emerald-400" />,
       type: "Hybrid",
       color: "from-emerald-950/40 to-emerald-900/20",
       borderColor: "border-emerald-500/30",
-      href: "/dashboard/playlab/creature-forge",
+      href: "/dashboard/playlab/secret-card-hunt",
       locked: false
     }
   ]
