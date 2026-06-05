@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase/client"
 import { Globe, Search, UserPlus, CheckCircle2, XCircle, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import Link from "next/link"
 
 export default function ConnectPage() {
   const [sessionUser, setSessionUser] = useState<any>(null)
@@ -17,6 +18,9 @@ export default function ConnectPage() {
   const [selectedPersonId, setSelectedPersonId] = useState<string>("NEW")
   const [sendingLink, setSendingLink] = useState(false)
 
+  // Local Network State
+  const [allMyPeople, setAllMyPeople] = useState<any[]>([])
+
   // Requests State
   const [incomingRequests, setIncomingRequests] = useState<any[]>([])
   const [outgoingRequests, setOutgoingRequests] = useState<any[]>([])
@@ -28,19 +32,27 @@ export default function ConnectPage() {
       if (session) {
         setSessionUser(session.user)
         fetchRequests(session.user.id)
-        
-        // Fetch private people who don't have a linked account yet
-        const { data: people } = await supabase
-          .from('people')
-          .select('id, name')
-          .eq('user_id', session.user.id)
-          .is('linked_user_id', null)
-        
-        if (people) setMyPeople(people)
+        fetchLocalPeople(session.user.id)
       }
     }
     init()
   }, [])
+
+  const fetchLocalPeople = async (userId: string) => {
+    try {
+      const { data: people } = await supabase
+        .from('people')
+        .select('id, name, linked_user_id, photo')
+        .eq('user_id', userId)
+      
+      if (people) {
+        setAllMyPeople(people)
+        setMyPeople(people.filter(p => !p.linked_user_id))
+      }
+    } catch (e) {
+      console.error("Failed to fetch local people:", e)
+    }
+  }
 
   const fetchRequests = async (userId: string) => {
     try {
@@ -182,6 +194,7 @@ export default function ConnectPage() {
       alert("Link request sent!")
       setSelectedProfile(null)
       fetchRequests(sessionUser.id)
+      fetchLocalPeople(sessionUser.id)
     } catch (e: any) {
       console.error(e)
       alert("Failed to send request. You may have already sent one!")
@@ -235,6 +248,7 @@ export default function ConnectPage() {
       }
 
       fetchRequests(sessionUser.id)
+      fetchLocalPeople(sessionUser.id)
     } catch (e) {
       console.error(e)
       alert("Failed to respond to request.")
@@ -301,7 +315,18 @@ export default function ConnectPage() {
                       <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-xs">@</div>
                     )}
                     <div>
-                      <p className="font-medium">@{profile.handle}</p>
+                      {(() => {
+                        const linkedPerson = allMyPeople.find(p => p.linked_user_id === profile.id)
+                        if (linkedPerson) {
+                          return (
+                            <Link href={`/dashboard/person/${linkedPerson.id}`} className="hover:underline text-purple-400 font-semibold flex items-center gap-1.5">
+                              <span>@{profile.handle}</span>
+                              <span className="text-xs text-gray-400 font-normal">({linkedPerson.name})</span>
+                            </Link>
+                          )
+                        }
+                        return <p className="font-medium">@{profile.handle}</p>
+                      })()}
                     </div>
                   </div>
                   
@@ -357,7 +382,18 @@ export default function ConnectPage() {
                         ) : (
                           <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs">@</div>
                         )}
-                      <p className="font-medium text-sm">@{req.profiles?.handle}</p>
+                      {(() => {
+                        const linkedPerson = allMyPeople.find(p => p.linked_user_id === req.sender_id)
+                        if (linkedPerson) {
+                          return (
+                            <Link href={`/dashboard/person/${linkedPerson.id}`} className="hover:underline text-purple-400 font-semibold flex items-center gap-1.5 text-sm">
+                              <span>@{req.profiles?.handle}</span>
+                              <span className="text-xs text-gray-400 font-normal">({linkedPerson.name})</span>
+                            </Link>
+                          )
+                        }
+                        return <p className="font-medium text-sm">@{req.profiles?.handle}</p>
+                      })()}
                     </div>
                     <div className="flex gap-2">
                       <button onClick={() => handleRespondRequest(req.id, req.sender_id, 'accepted')} className="p-1.5 rounded bg-green-500/20 text-green-400 hover:bg-green-500/30">
@@ -387,7 +423,18 @@ export default function ConnectPage() {
                         ) : (
                           <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs">@</div>
                         )}
-                      <p className="font-medium text-sm">@{req.profiles?.handle}</p>
+                      {(() => {
+                        const linkedPerson = allMyPeople.find(p => p.linked_user_id === req.receiver_id)
+                        if (linkedPerson) {
+                          return (
+                            <Link href={`/dashboard/person/${linkedPerson.id}`} className="hover:underline text-purple-400 font-semibold flex items-center gap-1.5 text-sm">
+                              <span>@{req.profiles?.handle}</span>
+                              <span className="text-xs text-gray-400 font-normal">({linkedPerson.name})</span>
+                            </Link>
+                          )
+                        }
+                        return <p className="font-medium text-sm">@{req.profiles?.handle}</p>
+                      })()}
                     </div>
                     <span className="text-xs text-gray-500 px-2 py-1 bg-black/50 rounded">Pending</span>
                   </div>
