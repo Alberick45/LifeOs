@@ -1,14 +1,26 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
-import { ArrowLeft, Brain, Zap, Trophy, Play, RotateCcw, Crown, TrendingUp, Users, AlertTriangle, Check, Lock, Sparkles, Heart, Sword, Shield, Activity, Plus, LogIn, ChevronRight } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
+import { ArrowLeft, Brain, Zap, Trophy, Play, RotateCcw, Crown, TrendingUp, Users, AlertTriangle, Check, Lock, Sparkles, Heart, Sword, Shield, Activity, Plus, LogIn, ChevronRight, Dna } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase/client"
 import { readCoins, adjustCoins, onCoinsChange, loadProgress, saveProgress, saveHighScore } from "@/lib/playlab-coins"
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
-type GamePhase = "MENU" | "MULTIPLAYER_SETUP" | "MULTIPLAYER_LOBBY" | "PLAYING_SOLO" | "PLAYING_PVP" | "PLAYING_COOP" | "RESULTS"
+type GamePhase = 
+  | "MENU" 
+  | "MULTIPLAYER_SETUP" 
+  | "MULTIPLAYER_LOBBY" 
+  | "PLAYING_SOLO" 
+  | "PLAYING_COOP" 
+  | "ARENA_LOBBY" 
+  | "ARENA_EVOLUTION" 
+  | "ARENA_BATTLE" 
+  | "ARENA_BRACKET" 
+  | "ARENA_RESULTS"
+  | "RESULTS"
+
 type MutationId = "wings" | "acid_blood" | "emp_skin" | "camouflage" | "magnetic_tail" | "spiked_carapace" | "venomous_stinger" | "regenerative_core"
 
 interface Mutation {
@@ -53,6 +65,50 @@ interface BattleLog {
   type: "attack" | "defend" | "heal" | "status" | "victory" | "defeat"
 }
 
+// Evolution Arena Specific Types
+interface EnvEvent {
+  id: string
+  name: string
+  emoji: string
+  description: string
+  effect: string
+}
+
+interface SynergyPath {
+  id: string
+  name: string
+  emoji: string
+  mutationsNeeded: MutationId[]
+  bonus: string
+  description: string
+}
+
+interface ArenaParticipant {
+  id: string
+  name: string
+  emoji: string
+  isBot: boolean
+  hp: number
+  hpMax: number
+  attack: number
+  defense: number
+  speed: number
+  dna: number
+  mutations: MutationId[]
+  synergyClass: string | null
+  status: "alive" | "eliminated"
+  rank: number | null
+}
+
+interface MatchPairing {
+  id: string
+  round: "QUARTER" | "SEMI" | "FINAL"
+  p1: ArenaParticipant
+  p2: ArenaParticipant
+  winnerId: string | null
+  combatLogs: string[]
+}
+
 // ─── Data ──────────────────────────────────────────────────────────────────────
 const MUTATIONS: Mutation[] = [
   {
@@ -62,7 +118,7 @@ const MUTATIONS: Mutation[] = [
     description: "Bio-membranes offering extreme agility and airborne evasion.",
     cost: 40,
     stats: { attack: 5, defense: 5, speed: 30, HPMax: 10 },
-    specialEffect: "Evade 25% of ground-based enemy physical attacks",
+    specialEffect: "Evade 25% of ground-based physical attacks",
     glowColor: "shadow-cyan-500/20 border-cyan-500/30 text-cyan-400 bg-cyan-950/20",
     branch: "auxiliary"
   },
@@ -73,7 +129,7 @@ const MUTATIONS: Mutation[] = [
     description: "Highly corrosive fluid that splashes on attackers when damaged.",
     cost: 50,
     stats: { attack: 20, defense: 5, speed: 5, HPMax: 15 },
-    specialEffect: "Deals 15 retaliation acid damage to attackers when hit",
+    specialEffect: "Deals 15 retaliation damage to attackers when hit",
     glowColor: "shadow-green-500/20 border-green-500/30 text-green-400 bg-green-950/20",
     branch: "offensive"
   },
@@ -84,7 +140,7 @@ const MUTATIONS: Mutation[] = [
     description: "Dermal bio-conductors emitting electromagnetic pulses.",
     cost: 60,
     stats: { attack: 10, defense: 25, speed: 10, HPMax: 20 },
-    specialEffect: "Chance to stun robotic or mechanical enemies for 1 turn",
+    specialEffect: "Chance to stun robotic or biological enemies",
     glowColor: "shadow-yellow-500/20 border-yellow-500/30 text-yellow-400 bg-yellow-950/20",
     branch: "defensive"
   },
@@ -158,25 +214,51 @@ const BOSS_PREDATORS: Enemy[] = [
   { name: "Cyber-Vortex Dragon", flag: "🐉", hp: 500, hpMax: 500, attack: 58, defense: 40, speed: 45, isBoss: true }
 ]
 
+const ENV_EVENTS: EnvEvent[] = [
+  { id: "clear", name: "Clear Atmosphere", emoji: "☀️", description: "Standard atmospheric conditions. No environmental modifiers.", effect: "No modifiers" },
+  { id: "toxic_storm", name: "Toxic Acid Storm", emoji: "🌪️", description: "Corrosive rain and high wind. Speed-reducing and acid-enhancing.", effect: "-30% speed to Winged creatures. Acid blood damage +10." },
+  { id: "flood", name: "Deep Flash Flood", emoji: "🌊", description: "Lobby submerged in hyper-saline water. Heavy carapace struggles.", effect: "-20% defense to Carapace. +30% speed to Camouflage & Aquatic creatures." },
+  { id: "emp_field", name: "EMP Resonance Field", emoji: "⚡", description: "Fluctuating electromagnetic currents.", effect: "+15% stun chance to Cyber-Skin creatures. Regenerative cores heal 10% less." },
+  { id: "volcanic_ash", name: "Volcanic Ash Cloud", emoji: "🌋", description: "Intense heat and choking sulfur dust.", effect: "+20 HP max heal to Regenerative Cores. All creatures lose 5 HP per turn." }
+]
+
+const SYNERGY_PATHS: SynergyPath[] = [
+  {
+    id: "sky_hunter",
+    name: "Sky Hunter",
+    emoji: "🦅",
+    mutationsNeeded: ["wings", "venomous_stinger", "camouflage"],
+    bonus: "+30% Critical strike chance & double poison duration",
+    description: "An agile, invisible aerial predator that delivers deadly venom."
+  },
+  {
+    id: "living_fortress",
+    name: "Living Fortress",
+    emoji: "🦀",
+    mutationsNeeded: ["spiked_carapace", "regenerative_core", "acid_blood"],
+    bonus: "+50% damage reflection and +10 bonus defense",
+    description: "A heavily armored beast that shrugs off strikes and retaliates with acid splash."
+  },
+  {
+    id: "bio_cyber_titan",
+    name: "Bio-Cyber Titan",
+    emoji: "🤖",
+    mutationsNeeded: ["emp_skin", "magnetic_tail", "regenerative_core"],
+    bonus: "+25% stun chance and +30% DNA absorption rate",
+    description: "An augmented bio-machine capable of disabling targets and absorbing raw materials."
+  }
+]
+
 // ─── Main Component ────────────────────────────────────────────────────────────
 export default function CreatureForgePage() {
   const [phase, setPhase] = useState<GamePhase>("MENU")
   const [userId, setUserId] = useState<string | null>(null)
   const [coins, setCoins] = useState(100)
   const [highScore, setHighScore] = useState(0)
-  const [score, setScore] = useState<number>(0)
-  const [alertMsg, setAlertMsg] = useState<{ text: string; success: boolean } | null>(null)
 
-  const triggerAlert = (text: string, success: boolean) => {
-    setAlertMsg({ text, success })
-    setTimeout(() => {
-      setAlertMsg(null)
-    }, 3000)
-  }
-
-  // Player Creature State
+  // Player Creature State (For solo campaign & co-op)
   const [creature, setCreature] = useState<Creature>({
-    name: "Protozoa-01",
+    name: "Proto-Leviathan",
     level: 1,
     dna: 50,
     hp: 100,
@@ -190,14 +272,15 @@ export default function CreatureForgePage() {
   // Selected mutation details preview
   const [previewMutation, setPreviewMutation] = useState<Mutation | null>(null)
 
-  // Combat States
+  // Combat States (Solo Campaign)
   const [activeEnemy, setActiveEnemy] = useState<Enemy | null>(null)
   const [campaignStage, setCampaignStage] = useState(0)
   const [battleLogs, setBattleLogs] = useState<BattleLog[]>([])
   const [turn, setTurn] = useState(1)
   const [combatOutcome, setCombatOutcome] = useState<"victory" | "defeat" | null>(null)
-  const [actionUsed, setActionUsed] = useState(false)
   const [poisonTurnsLeft, setPoisonTurnsLeft] = useState(0)
+  const [score, setScore] = useState<number>(0)
+  const [alertMsg, setAlertMsg] = useState<{ text: string; success: boolean } | null>(null)
 
   // Multiplayer Specific
   const [isMultiplayer, setIsMultiplayer] = useState(false)
@@ -212,8 +295,28 @@ export default function CreatureForgePage() {
   // Co-op Raid Specific
   const [raidBoss, setRaidBoss] = useState<{ name: string; hp: number; hpMax: number; attack: number } | null>(null)
 
+  // ─── Evolution Arena State Variables ──────────────────────────────────────
+  const [arenaParticipants, setArenaParticipants] = useState<ArenaParticipant[]>([])
+  const [arenaRound, setArenaRound] = useState<"QUARTER" | "SEMI" | "FINAL" | "COMPLETED">("QUARTER")
+  const [currentEnvEvent, setCurrentEnvEvent] = useState<EnvEvent>(ENV_EVENTS[0])
+  const [arenaMatches, setArenaMatches] = useState<MatchPairing[]>([])
+  const [activeArenaMatch, setActiveArenaMatch] = useState<MatchPairing | null>(null)
+  const [arenaLogs, setArenaLogs] = useState<string[]>([])
+  const [isSimulatingLogs, setIsSimulatingLogs] = useState(false)
+  const [selectedArenaTab, setSelectedArenaTab] = useState<"combat" | "bracket">("combat")
+  const [arenaOutcome, setArenaOutcome] = useState<"victory" | "defeat" | null>(null)
+  const [dnaSpentThisRound, setDnaSpentThisRound] = useState(0)
+  const [arenaWinner, setArenaWinner] = useState<ArenaParticipant | null>(null)
+
   const channelRef = useRef<any>(null)
   const logContainerRef = useRef<HTMLDivElement>(null)
+
+  const triggerAlert = (text: string, success: boolean) => {
+    setAlertMsg({ text, success })
+    setTimeout(() => {
+      setAlertMsg(null)
+    }, 3000)
+  }
 
   // Load user details + database progress
   useEffect(() => {
@@ -255,7 +358,7 @@ export default function CreatureForgePage() {
     if (logContainerRef.current) {
       logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight
     }
-  }, [battleLogs])
+  }, [battleLogs, arenaLogs])
 
   // Log battle chronicle
   const logBattle = (message: string, type: BattleLog["type"]) => {
@@ -284,7 +387,7 @@ export default function CreatureForgePage() {
     }
     setCreature(baseCreature)
     setActiveEnemy({ ...WILD_PREDATORS[0] })
-    setBattleLogs([{ id: "start", round: 0, message: `🌱 Organism spawned. Wild environment detected. Combat initialized!`, type: "status" }])
+    setBattleLogs([{ id: "start", round: 0, message: `🌱 Organism spawned. Wild environment detected. Training Combat initialized!`, type: "status" }])
     setPhase("PLAYING_SOLO")
   }
 
@@ -418,7 +521,7 @@ export default function CreatureForgePage() {
     saveResult(score + (activeEnemy?.isBoss ? 150 : 50))
   }
 
-  // Evolve mutation
+  // Evolve mutation (Solo Campaign)
   const evolveMutation = (mut: Mutation) => {
     if (creature.dna < mut.cost) return
     if (creature.mutations.includes(mut.id)) return
@@ -475,7 +578,7 @@ export default function CreatureForgePage() {
     }
   }
 
-  // ── Multiplayer Lobbies ──────────────────────────────────────────────────────
+  // ── Co-op Raid Lobbies ──────────────────────────────────────────────────────
   const createRoom = () => {
     const code = Math.random().toString(36).substring(2, 6).toUpperCase()
     setRoomCode(code)
@@ -551,7 +654,6 @@ export default function CreatureForgePage() {
     channel.on('broadcast', { event: 'raid-action' }, ({ payload }) => {
       addEventRaid(payload.message, payload.type)
       if (payload.action === "heal-team") {
-        // Heal teammates slightly
         setCreature(prev => ({ ...prev, hp: Math.min(prev.hpMax, prev.hp + 20) }))
       }
     })
@@ -588,7 +690,6 @@ export default function CreatureForgePage() {
     channel.on('broadcast', { event: 'next-round' }, () => {
       setTurn(t => t + 1)
       setTurnSubmitted(false)
-      // core regen
       if (creature.mutations.includes("regenerative_core")) {
         setCreature(prev => ({ ...prev, hp: Math.min(prev.hpMax, prev.hp + 15) }))
       }
@@ -703,7 +804,6 @@ export default function CreatureForgePage() {
     })
 
     if (allSubmitted) {
-      // Boss attacks a random target
       const target = activePlayers[Math.floor(Math.random() * activePlayers.length)]
       const dmg = Math.max(10, Math.floor(raidBoss.attack * (0.7 + Math.random() * 0.5)))
       const msg = `⚡ Boss unleashed seismic slam targeting ${target.name} for ${dmg} damage!`
@@ -714,7 +814,6 @@ export default function CreatureForgePage() {
         payload: { targetId: target.presenceId, damage: dmg, eventMsg: msg }
       })
 
-      // Advance round
       setTimeout(() => {
         channelRef.current.send({
           type: 'broadcast',
@@ -733,7 +832,573 @@ export default function CreatureForgePage() {
     setPhase("MENU")
   }
 
-  // ── BUILD JSX ──────────────────────────────────────────────────────────────
+
+  // ─── EVOLUTION ARENA ENGINE ───────────────────────────────────────────────
+
+  // Initialize evolutionary arena with bots
+  const startEvolutionArena = () => {
+    setIsMultiplayer(false)
+    setArenaRound("QUARTER")
+    setArenaOutcome(null)
+    setDnaSpentThisRound(0)
+    
+    // Choose random event for Quarterfinals
+    const initialEvent = ENV_EVENTS[Math.floor(Math.random() * (ENV_EVENTS.length - 1)) + 1]
+    setCurrentEnvEvent(initialEvent)
+
+    const userOrganism: ArenaParticipant = {
+      id: "player",
+      name: username || "Player Organism",
+      emoji: "🦠",
+      isBot: false,
+      hp: 100,
+      hpMax: 100,
+      attack: 15,
+      defense: 10,
+      speed: 15,
+      dna: 50,
+      mutations: [],
+      synergyClass: null,
+      status: "alive",
+      rank: null
+    }
+
+    const bots: ArenaParticipant[] = [
+      { id: "bot-1", name: "Thorn-Weaver", emoji: "🦂", isBot: true, hp: 100, hpMax: 100, attack: 15, defense: 10, speed: 15, dna: 50, mutations: [], synergyClass: null, status: "alive", rank: null },
+      { id: "bot-2", name: "Acid-Goliath", emoji: "🧪", isBot: true, hp: 100, hpMax: 100, attack: 15, defense: 10, speed: 15, dna: 50, mutations: [], synergyClass: null, status: "alive", rank: null },
+      { id: "bot-3", name: "Sky-Reaper", emoji: "🦅", isBot: true, hp: 100, hpMax: 100, attack: 15, defense: 10, speed: 15, dna: 50, mutations: [], synergyClass: null, status: "alive", rank: null },
+      { id: "bot-4", name: "Shadow-Wraith", emoji: "🦎", isBot: true, hp: 100, hpMax: 100, attack: 15, defense: 10, speed: 15, dna: 50, mutations: [], synergyClass: null, status: "alive", rank: null },
+      { id: "bot-5", name: "EMP-Leviathan", emoji: "⚡", isBot: true, hp: 100, hpMax: 100, attack: 15, defense: 10, speed: 15, dna: 50, mutations: [], synergyClass: null, status: "alive", rank: null },
+      { id: "bot-6", name: "Cyber-Scorpion", emoji: "🤖", isBot: true, hp: 100, hpMax: 100, attack: 15, defense: 10, speed: 15, dna: 50, mutations: [], synergyClass: null, status: "alive", rank: null },
+      { id: "bot-7", name: "Plasma-Hydra", emoji: "🌋", isBot: true, hp: 100, hpMax: 100, attack: 15, defense: 10, speed: 15, dna: 50, mutations: [], synergyClass: null, status: "alive", rank: null }
+    ]
+
+    setArenaParticipants([userOrganism, ...bots])
+    setPhase("ARENA_EVOLUTION")
+  }
+
+  // Evolve mutation specifically in Arena
+  const evolveArenaMutation = (mut: Mutation) => {
+    const playerIndex = arenaParticipants.findIndex(p => p.id === "player")
+    if (playerIndex === -1) return
+    const player = arenaParticipants[playerIndex]
+
+    if (player.dna < mut.cost) {
+      triggerAlert("Not enough DNA!", false)
+      return
+    }
+    if (player.mutations.includes(mut.id)) return
+
+    const nextMutations = [...player.mutations, mut.id]
+    
+    // Recalculate stats
+    let nextHpMax = 100
+    let nextAttack = 15
+    let nextDefense = 10
+    let nextSpeed = 15
+
+    nextMutations.forEach(mId => {
+      const m = MUTATIONS.find(x => x.id === mId)
+      if (m) {
+        nextHpMax += m.stats.HPMax
+        nextAttack += m.stats.attack
+        nextDefense += m.stats.defense
+        nextSpeed += m.stats.speed
+      }
+    })
+
+    // Check synergies
+    let synergy: string | null = null
+    for (const path of SYNERGY_PATHS) {
+      if (path.mutationsNeeded.every(mId => nextMutations.includes(mId))) {
+        synergy = path.name
+        if (path.id === "sky_hunter") nextSpeed += 15
+        if (path.id === "living_fortress") nextDefense += 15
+        if (path.id === "bio_cyber_titan") nextHpMax += 20
+        break
+      }
+    }
+
+    const updatedPlayer = {
+      ...player,
+      dna: player.dna - mut.cost,
+      mutations: nextMutations,
+      hpMax: nextHpMax,
+      hp: nextHpMax,
+      attack: nextAttack,
+      defense: nextDefense,
+      speed: nextSpeed,
+      synergyClass: synergy
+    }
+
+    setDnaSpentThisRound(prev => prev + mut.cost)
+    setArenaParticipants(prev => prev.map(p => p.id === "player" ? updatedPlayer : p))
+    triggerAlert(`Successfully mutated ${mut.emoji} ${mut.name}!`, true)
+  }
+
+  // Refund mutation (for strategic drafting adjustments)
+  const refundArenaMutation = (mutId: MutationId) => {
+    const playerIndex = arenaParticipants.findIndex(p => p.id === "player")
+    if (playerIndex === -1) return
+    const player = arenaParticipants[playerIndex]
+    if (!player.mutations.includes(mutId)) return
+
+    const nextMutations = player.mutations.filter(m => m !== mutId)
+    const mutData = MUTATIONS.find(m => m.id === mutId)
+    const costRefunded = mutData?.cost || 0
+
+    let nextHpMax = 100
+    let nextAttack = 15
+    let nextDefense = 10
+    let nextSpeed = 15
+
+    nextMutations.forEach(mId => {
+      const m = MUTATIONS.find(x => x.id === mId)
+      if (m) {
+        nextHpMax += m.stats.HPMax
+        nextAttack += m.stats.attack
+        nextDefense += m.stats.defense
+        nextSpeed += m.stats.speed
+      }
+    })
+
+    let synergy: string | null = null
+    for (const path of SYNERGY_PATHS) {
+      if (path.mutationsNeeded.every(mId => nextMutations.includes(mId))) {
+        synergy = path.name
+        if (path.id === "sky_hunter") nextSpeed += 15
+        if (path.id === "living_fortress") nextDefense += 15
+        if (path.id === "bio_cyber_titan") nextHpMax += 20
+        break
+      }
+    }
+
+    const updatedPlayer = {
+      ...player,
+      dna: player.dna + costRefunded,
+      mutations: nextMutations,
+      hpMax: nextHpMax,
+      hp: nextHpMax,
+      attack: nextAttack,
+      defense: nextDefense,
+      speed: nextSpeed,
+      synergyClass: synergy
+    }
+
+    setDnaSpentThisRound(prev => Math.max(0, prev - costRefunded))
+    setArenaParticipants(prev => prev.map(p => p.id === "player" ? updatedPlayer : p))
+  }
+
+  // Simulated bot drafting logic
+  const runBotDrafting = (aliveBots: ArenaParticipant[]): ArenaParticipant[] => {
+    return aliveBots.map(bot => {
+      let availableDna = bot.dna
+      const mutated = [...bot.mutations]
+      
+      let affordable = MUTATIONS.filter(m => !mutated.includes(m.id) && m.cost <= availableDna)
+      
+      // Personality Archetypes
+      let preferredBranch: "offensive" | "defensive" | "auxiliary" | null = null
+      if (bot.name === "Thorn-Weaver" || bot.name === "Acid-Goliath") preferredBranch = "defensive"
+      if (bot.name === "Sky-Reaper" || bot.name === "Shadow-Wraith") preferredBranch = "offensive"
+      if (bot.name === "EMP-Leviathan" || bot.name === "Cyber-Scorpion") preferredBranch = "auxiliary"
+
+      while (affordable.length > 0) {
+        let choices = affordable
+        if (preferredBranch) {
+          const branchChoices = affordable.filter(m => m.branch === preferredBranch)
+          if (branchChoices.length > 0) choices = branchChoices
+        }
+
+        const chosen = choices[Math.floor(Math.random() * choices.length)]
+        mutated.push(chosen.id)
+        availableDna -= chosen.cost
+
+        const nextAffordable = MUTATIONS.filter(m => !mutated.includes(m.id) && m.cost <= availableDna)
+        if (nextAffordable.length === affordable.length) break
+        affordable = nextAffordable
+      }
+
+      // Re-stats
+      let nextHpMax = 100
+      let nextAttack = 15
+      let nextDefense = 10
+      let nextSpeed = 15
+
+      mutated.forEach(mId => {
+        const m = MUTATIONS.find(x => x.id === mId)
+        if (m) {
+          nextHpMax += m.stats.HPMax
+          nextAttack += m.stats.attack
+          nextDefense += m.stats.defense
+          nextSpeed += m.stats.speed
+        }
+      })
+
+      let synergy: string | null = null
+      for (const path of SYNERGY_PATHS) {
+        if (path.mutationsNeeded.every(mId => mutated.includes(mId))) {
+          synergy = path.name
+          if (path.id === "sky_hunter") nextSpeed += 15
+          if (path.id === "living_fortress") nextDefense += 15
+          if (path.id === "bio_cyber_titan") nextHpMax += 20
+          break
+        }
+      }
+
+      return {
+        ...bot,
+        dna: availableDna,
+        mutations: mutated,
+        hpMax: nextHpMax,
+        hp: nextHpMax,
+        attack: nextAttack,
+        defense: nextDefense,
+        speed: nextSpeed,
+        synergyClass: synergy
+      }
+    })
+  }
+
+  // Core Auto-Battle Sim Engine
+  const simulateMatch = (p1: ArenaParticipant, p2: ArenaParticipant, env: EnvEvent): { winnerId: string; logs: string[] } => {
+    const logs: string[] = []
+    const c1 = { ...p1, hp: p1.hpMax }
+    const c2 = { ...p2, hp: p2.hpMax }
+
+    logs.push(`🧬 EVOLUTION FIGHT INITIALIZED: ${c1.name} vs ${c2.name}`)
+    logs.push(`🌍 Environment: ${env.emoji} ${env.name} - ${env.description}`)
+
+    let c1Speed = c1.speed
+    let c2Speed = c2.speed
+    let c1Def = c1.defense
+    let c2Def = c2.defense
+
+    // Apply modifiers
+    if (env.id === "toxic_storm") {
+      if (c1.mutations.includes("wings")) c1Speed = Math.floor(c1Speed * 0.7)
+      if (c2.mutations.includes("wings")) c2Speed = Math.floor(c2Speed * 0.7)
+    }
+    if (env.id === "flood") {
+      if (c1.mutations.includes("spiked_carapace")) c1Def = Math.floor(c1Def * 0.8)
+      if (c2.mutations.includes("spiked_carapace")) c2Def = Math.floor(c2Def * 0.8)
+      if (c1.mutations.includes("camouflage")) c1Speed = Math.floor(c1Speed * 1.3)
+      if (c2.mutations.includes("camouflage")) c2Speed = Math.floor(c2Speed * 1.3)
+    }
+
+    let battleRound = 1
+    let c1Stunned = false
+    let c2Stunned = false
+    let c1Poison = 0
+    let c2Poison = 0
+
+    while (c1.hp > 0 && c2.hp > 0 && battleRound <= 35) {
+      logs.push(`[Round ${battleRound}]`)
+
+      // Poison check
+      if (c1Poison > 0) {
+        const pDmg = 12
+        c1.hp = Math.max(0, c1.hp - pDmg)
+        logs.push(`🤢 Poison toxins deal ${pDmg} dmg to ${c1.name} (HP: ${c1.hp}/${c1.hpMax})`)
+        c1Poison--
+      }
+      if (c2Poison > 0) {
+        const pDmg = 12
+        c2.hp = Math.max(0, c2.hp - pDmg)
+        logs.push(`🤢 Poison toxins deal ${pDmg} dmg to ${c2.name} (HP: ${c2.hp}/${c2.hpMax})`)
+        c2Poison--
+      }
+
+      // Volcanic Ash damage
+      if (env.id === "volcanic_ash") {
+        c1.hp = Math.max(0, c1.hp - 5)
+        c2.hp = Math.max(0, c2.hp - 5)
+        logs.push(`🌋 Volcanic heat burns both competitors (-5 HP)`)
+      }
+
+      if (c1.hp <= 0 || c2.hp <= 0) break
+
+      // Speed priority
+      const attackers = c1Speed >= c2Speed ? [
+        { attacker: c1, defender: c2, isStunned: c1Stunned, setStunned: (s: boolean) => c1Stunned = s, setPoison: (p: number) => c2Poison = p, enemyDef: c2Def },
+        { attacker: c2, defender: c1, isStunned: c2Stunned, setStunned: (s: boolean) => c2Stunned = s, setPoison: (p: number) => c1Poison = p, enemyDef: c1Def }
+      ] : [
+        { attacker: c2, defender: c1, isStunned: c2Stunned, setStunned: (s: boolean) => c2Stunned = s, setPoison: (p: number) => c1Poison = p, enemyDef: c1Def },
+        { attacker: c1, defender: c2, isStunned: c1Stunned, setStunned: (s: boolean) => c1Stunned = s, setPoison: (p: number) => c2Poison = p, enemyDef: c2Def }
+      ]
+
+      for (const combat of attackers) {
+        if (combat.attacker.hp <= 0 || combat.defender.hp <= 0) continue
+
+        if (combat.isStunned) {
+          logs.push(`⚡ ${combat.attacker.name} is paralyzed and skips action!`)
+          combat.setStunned(false)
+          continue
+        }
+
+        // Evasion check
+        let evasion = 0.05
+        if (combat.defender.mutations.includes("wings")) evasion += 0.25
+        if (combat.defender.mutations.includes("camouflage")) evasion += 0.30
+
+        if (Math.random() < evasion) {
+          logs.push(`💨 ${combat.defender.name} evades the strike with lightning reflexes!`)
+          continue
+        }
+
+        // Crit hit (Sky Hunter synergy)
+        let isCrit = false
+        if (combat.attacker.synergyClass === "Sky Hunter" && Math.random() < 0.35) {
+          isCrit = true
+        }
+
+        let damage = Math.max(5, Math.floor(combat.attacker.attack * (0.85 + Math.random() * 0.3) - combat.enemyDef * 0.5))
+        if (isCrit) damage *= 2
+
+        // Spiked Carapace Reflection
+        let reflected = 0
+        if (combat.defender.mutations.includes("spiked_carapace")) {
+          const mult = combat.defender.synergyClass === "Living Fortress" ? 0.5 : 0.2
+          reflected = Math.floor(damage * mult)
+        }
+
+        // Acid blood splash
+        let acidSplash = 0
+        if (combat.defender.mutations.includes("acid_blood")) {
+          acidSplash = env.id === "toxic_storm" ? 25 : 15
+        }
+
+        combat.defender.hp = Math.max(0, combat.defender.hp - damage)
+        logs.push(`${isCrit ? "🎯 [CRITICAL CRASH] " : "⚔️ "}${combat.attacker.name} strikes for ${damage} damage!`)
+
+        if (reflected > 0) {
+          combat.attacker.hp = Math.max(0, combat.attacker.hp - reflected)
+          logs.push(`🐚 Spiked Carapace reflects ${reflected} damage back to ${combat.attacker.name}!`)
+        }
+        if (acidSplash > 0) {
+          combat.attacker.hp = Math.max(0, combat.attacker.hp - acidSplash)
+          logs.push(`🧪 Corrosive acid splashes ${combat.attacker.name} dealing ${acidSplash} damage!`)
+        }
+
+        // Stinger poison
+        if (combat.attacker.mutations.includes("venomous_stinger")) {
+          const dur = combat.attacker.synergyClass === "Sky Hunter" ? 6 : 3
+          combat.setPoison(dur)
+          logs.push(`🦂 ${combat.attacker.name} strikes with neurotoxins (poisoned for ${dur} rounds)`)
+        }
+
+        // Cyber Skin EMP stun
+        if (combat.attacker.mutations.includes("emp_skin")) {
+          let stunChance = 0.15
+          if (env.id === "emp_field") stunChance += 0.15
+          if (combat.attacker.synergyClass === "Bio-Cyber Titan") stunChance += 0.25
+
+          if (Math.random() < stunChance) {
+            combat.setStunned(true)
+            logs.push(`⚡ EMP burst paralyzes ${combat.defender.name} for 1 turn!`)
+          }
+        }
+      }
+
+      // End of turn regeneration
+      if (c1.hp > 0 && c1.mutations.includes("regenerative_core")) {
+        let heal = 15
+        if (env.id === "volcanic_ash") heal += 20
+        if (env.id === "emp_field") heal -= 5
+        c1.hp = Math.min(c1.hpMax, c1.hp + heal)
+        logs.push(`🌋 Core furnace heals ${c1.name} for +${heal} HP.`)
+      }
+      if (c2.hp > 0 && c2.mutations.includes("regenerative_core")) {
+        let heal = 15
+        if (env.id === "volcanic_ash") heal += 20
+        if (env.id === "emp_field") heal -= 5
+        c2.hp = Math.min(c2.hpMax, c2.hp + heal)
+        logs.push(`🌋 Core furnace heals ${c2.name} for +${heal} HP.`)
+      }
+
+      battleRound++
+    }
+
+    const winnerId = c1.hp > 0 ? c1.id : c2.id
+    logs.push(`🏁 BATTLE OVER: ${c1.hp > 0 ? c1.name : c2.name} survives as the victor!`)
+    return { winnerId, logs }
+  }
+
+  // Lock evolution & start the auto-battle simulation
+  const lockArenaEvolution = () => {
+    // 1. Let bots draft
+    const aliveBots = arenaParticipants.filter(p => p.isBot && p.status === "alive")
+    const draftedBots = runBotDrafting(aliveBots)
+    const player = arenaParticipants.find(p => !p.isBot)!
+
+    // Combined updated list
+    const updatedParticipants = arenaParticipants.map(p => {
+      if (p.id === "player") return player
+      const updatedBot = draftedBots.find(b => b.id === p.id)
+      return updatedBot || p
+    })
+
+    // 2. Generate match pairings for the current round
+    const alive = updatedParticipants.filter(p => p.status === "alive")
+    const pairings: MatchPairing[] = []
+
+    if (arenaRound === "QUARTER") {
+      // Pair 1v2, 3v4, 5v6, 7v8
+      for (let i = 0; i < 8; i += 2) {
+        pairings.push({
+          id: `match-Q-${i/2}`,
+          round: "QUARTER",
+          p1: updatedParticipants[i],
+          p2: updatedParticipants[i+1],
+          winnerId: null,
+          combatLogs: []
+        })
+      }
+    } else if (arenaRound === "SEMI") {
+      // Pair 4 survivors
+      for (let i = 0; i < alive.length; i += 2) {
+        pairings.push({
+          id: `match-S-${i/2}`,
+          round: "SEMI",
+          p1: alive[i],
+          p2: alive[i+1],
+          winnerId: null,
+          combatLogs: []
+        })
+      }
+    } else if (arenaRound === "FINAL") {
+      // Final 2
+      pairings.push({
+        id: "match-final",
+        round: "FINAL",
+        p1: alive[0],
+        p2: alive[1],
+        winnerId: null,
+        combatLogs: []
+      })
+    }
+
+    setArenaParticipants(updatedParticipants)
+    setArenaMatches(pairings)
+    setSelectedArenaTab("combat")
+
+    // Find player's match
+    const playerMatch = pairings.find(m => m.p1.id === "player" || m.p2.id === "player")
+    if (playerMatch) {
+      setActiveArenaMatch(playerMatch)
+      setArenaLogs([])
+      setIsSimulatingLogs(true)
+      setPhase("ARENA_BATTLE")
+
+      const sim = simulateMatch(playerMatch.p1, playerMatch.p2, currentEnvEvent)
+      
+      // Stream logs for player's view
+      let idx = 0
+      const interval = setInterval(() => {
+        if (idx < sim.logs.length) {
+          setArenaLogs(prev => [...prev, sim.logs[idx]])
+          idx++
+        } else {
+          clearInterval(interval)
+          setIsSimulatingLogs(false)
+
+          // Mark player match results
+          setArenaMatches(prev => prev.map(m => m.id === playerMatch.id ? { ...m, winnerId: sim.winnerId, combatLogs: sim.logs } : m))
+          
+          // Update ranks/elimination status
+          const won = sim.winnerId === "player"
+          setArenaParticipants(prev => prev.map(p => {
+            if (p.id === sim.winnerId) return p
+            if (p.id === playerMatch.p1.id || p.id === playerMatch.p2.id) {
+              return { ...p, status: "eliminated" as const, rank: arenaRound === "QUARTER" ? 8 : arenaRound === "SEMI" ? 4 : 2 }
+            }
+            return p
+          }))
+
+          if (!won) {
+            setArenaOutcome("defeat")
+          }
+        }
+      }, 300)
+    } else {
+      // Player is already eliminated, auto-sim all matches
+      const resolvedPairings = pairings.map(m => {
+        const sim = simulateMatch(m.p1, m.p2, currentEnvEvent)
+        return { ...m, winnerId: sim.winnerId, combatLogs: sim.logs }
+      })
+
+      setArenaMatches(resolvedPairings)
+      setArenaParticipants(prev => prev.map(p => {
+        const m = resolvedPairings.find(x => x.p1.id === p.id || x.p2.id === p.id)
+        if (m && m.winnerId !== p.id) {
+          return { ...p, status: "eliminated" as const, rank: arenaRound === "QUARTER" ? 8 : arenaRound === "SEMI" ? 4 : 2 }
+        }
+        return p
+      }))
+      setPhase("ARENA_BRACKET")
+    }
+
+    // Simultaneously simulate other non-player matches in the background
+    pairings.forEach(m => {
+      if (m.p1.id !== "player" && m.p2.id !== "player") {
+        const sim = simulateMatch(m.p1, m.p2, currentEnvEvent)
+        setArenaMatches(prev => prev.map(x => x.id === m.id ? { ...x, winnerId: sim.winnerId, combatLogs: sim.logs } : x))
+        setArenaParticipants(prev => prev.map(p => {
+          if (p.id === sim.winnerId) return p
+          if (p.id === m.p1.id || p.id === m.p2.id) {
+            return { ...p, status: "eliminated" as const, rank: arenaRound === "QUARTER" ? 8 : arenaRound === "SEMI" ? 4 : 2 }
+          }
+          return p
+        }))
+      }
+    })
+  }
+
+  // Advance to next bracket phase or conclude the Arena
+  const nextArenaRound = () => {
+    if (arenaRound === "QUARTER") {
+      setArenaRound("SEMI")
+      // Reward survivor DNA
+      setArenaParticipants(prev => prev.map(p => p.status === "alive" ? { ...p, dna: p.dna + 50 } : p))
+      setCurrentEnvEvent(ENV_EVENTS[Math.floor(Math.random() * (ENV_EVENTS.length - 1)) + 1])
+      setDnaSpentThisRound(0)
+      setPhase("ARENA_EVOLUTION")
+    } else if (arenaRound === "SEMI") {
+      setArenaRound("FINAL")
+      setArenaParticipants(prev => prev.map(p => p.status === "alive" ? { ...p, dna: p.dna + 50 } : p))
+      setCurrentEnvEvent(ENV_EVENTS[Math.floor(Math.random() * (ENV_EVENTS.length - 1)) + 1])
+      setDnaSpentThisRound(0)
+      setPhase("ARENA_EVOLUTION")
+    } else if (arenaRound === "FINAL") {
+      setArenaRound("COMPLETED")
+      // Player won the entire tournament!
+      const player = arenaParticipants.find(p => p.id === "player")!
+      setArenaWinner(player)
+      setArenaOutcome("victory")
+      setPhase("ARENA_RESULTS")
+      saveArenaResults(250) // Apex bonus
+    }
+  }
+
+  const saveArenaResults = (points: number) => {
+    const earned = Math.floor(points / 25)
+    if (earned > 0) {
+      const next = adjustCoins(userId, earned)
+      setCoins(next)
+    }
+    if (points > highScore) {
+      setHighScore(points)
+      saveHighScore(userId, "creature_forge", points)
+    }
+  }
+
+  // Exit Arena / clean up
+  const exitArenaMode = () => {
+    setPhase("MENU")
+  }
+
+
+  // ─── BUILD JSX ──────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-10">
 
@@ -778,44 +1443,40 @@ export default function CreatureForgePage() {
             <div className="rounded-3xl border border-emerald-500/20 bg-gradient-to-br from-emerald-950/20 via-black to-zinc-950 p-8 space-y-6">
               <div>
                 <span className="px-2.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] uppercase tracking-widest font-black rounded-full">Evolution Chamber</span>
-                <h2 className="text-xl font-black text-white mt-3">Design & Evolve Organisms</h2>
-                <p className="text-sm text-gray-400 mt-1">Mutate wings, spiked carapace, venomous stingers, or regenerative core. Advance through campaign stages or form co-op teams to raid ecosystem bosses.</p>
+                <h2 className="text-2xl font-black text-white mt-3">Design & Evolve Apex Organisms</h2>
+                <p className="text-sm text-gray-400 mt-1">
+                  Mutate wings, spiked carapace, or regenerative cores. Test adaptations in the auto-battler tournament, advance in campaign training, or raid co-op bosses.
+                </p>
               </div>
 
-              {/* Mutation Quick Preview Tree */}
-              <div className="bg-white/5 border border-white/5 p-4 rounded-2xl space-y-4">
-                <h3 className="text-xs font-bold text-gray-300 uppercase tracking-widest">Biological Mutations Available</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {MUTATIONS.map(m => (
-                    <div key={m.id} onClick={() => setPreviewMutation(m)}
-                      className={`p-3 border rounded-xl cursor-pointer hover:bg-white/10 transition-all text-center ${previewMutation?.id === m.id ? "border-emerald-500/50 bg-emerald-950/20" : "border-white/5 bg-white/5"}`}>
-                      <span className="text-2xl block mb-1">{m.emoji}</span>
-                      <span className="text-[10px] font-black text-white block truncate">{m.name}</span>
-                    </div>
-                  ))}
+              {/* Game Mode Selector Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                <div onClick={startEvolutionArena} className="p-6 rounded-2xl border border-emerald-500/30 bg-emerald-950/10 hover:bg-emerald-950/20 cursor-pointer transition-all hover:scale-[1.02] shadow-[0_0_15px_rgba(16,185,129,0.1)] group">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-3xl">🏆</span>
+                    <span className="text-[9px] uppercase font-black text-emerald-400 px-2 py-0.5 bg-emerald-500/10 rounded-full">Flagship Mode</span>
+                  </div>
+                  <h4 className="text-base font-black text-white group-hover:text-emerald-400 transition-colors">Evolution Arena</h4>
+                  <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">
+                    8-creature Darwinian tournament. Draft mutations, adapt to toxic storms, earthquakes, and flood events, and auto-battle to become the Apex Species.
+                  </p>
                 </div>
 
-                {previewMutation && (
-                  <div className={`p-4 rounded-xl border animate-in fade-in duration-200 ${previewMutation.glowColor}`}>
-                    <h4 className="text-sm font-bold text-white flex items-center gap-1.5">{previewMutation.emoji} {previewMutation.name}</h4>
-                    <p className="text-xs text-gray-400 mt-1">{previewMutation.description}</p>
-                    <p className="text-[10px] text-yellow-400 font-extrabold mt-2">⚡ Special: {previewMutation.specialEffect}</p>
-                    <div className="grid grid-cols-4 gap-2 mt-3 text-[10px] text-gray-400">
-                      <span>⚔️ Att: +{previewMutation.stats.attack}</span>
-                      <span>🛡️ Def: +{previewMutation.stats.defense}</span>
-                      <span>💨 Spd: +{previewMutation.stats.speed}</span>
-                      <span>❤️ HP: +{previewMutation.stats.HPMax}</span>
-                    </div>
+                <div onClick={startCampaign} className="p-6 rounded-2xl border border-white/5 bg-white/5 hover:bg-white/10 cursor-pointer transition-all hover:scale-[1.02] group">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-3xl">⚔️</span>
+                    <span className="text-[9px] uppercase font-black text-gray-400 px-2 py-0.5 bg-white/5 rounded-full">Training</span>
                   </div>
-                )}
+                  <h4 className="text-base font-black text-white group-hover:text-emerald-400 transition-colors">Solo Campaign</h4>
+                  <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">
+                    Manual RPG combat against wild species. Evolve mutations one-by-one to prepare your species for the arena.
+                  </p>
+                </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Button onClick={startCampaign} className="flex-1 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-extrabold py-6 rounded-2xl text-base shadow-lg shadow-emerald-500/20 hover:scale-[1.02] transition-all gap-2">
-                  <Activity className="h-5 w-5 animate-pulse" /> Solo Campaign
-                </Button>
-                <Button onClick={() => setPhase("MULTIPLAYER_SETUP")} className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold py-6 rounded-2xl text-base shadow-lg shadow-purple-500/20 hover:scale-[1.02] transition-all gap-2">
-                  <Users className="h-5 w-5" /> Co-op Raid Lobby
+              <div className="flex">
+                <Button onClick={() => setPhase("MULTIPLAYER_SETUP")} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold py-5 rounded-2xl text-sm gap-2">
+                  <Users className="h-5 w-5" /> Assemble Co-op Raid Squad
                 </Button>
               </div>
             </div>
@@ -826,9 +1487,9 @@ export default function CreatureForgePage() {
             <div className="rounded-3xl border border-white/5 bg-white/5 p-5 space-y-3">
               <div className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-emerald-400" />
-                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-300">Organism Apex Stages</h3>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-300">Wild Predators</h3>
               </div>
-              {BOSS_PREDATORS.map(b => (
+              {WILD_PREDATORS.map(b => (
                 <div key={b.name} className="flex items-start gap-2 p-2 bg-white/5 rounded-xl border border-white/5">
                   <span className="text-xl">{b.flag}</span>
                   <div>
@@ -948,7 +1609,6 @@ export default function CreatureForgePage() {
                       <div key={m.id} onClick={() => {
                         if (!owned && creature.dna >= m.cost) {
                           evolveMutation(m)
-                          // track presence update
                           if (channelRef.current) {
                             channelRef.current.track({
                               name: username,
@@ -1011,7 +1671,520 @@ export default function CreatureForgePage() {
         </div>
       )}
 
-      {/* ── PLAYING SOLO SCREEN ────────────────────────────────────────────────── */}
+      {/* ── EVOLUTION ARENA: DRAFTING / EVOLUTION PHASE ─────────────────────── */}
+      {phase === "ARENA_EVOLUTION" && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start animate-in fade-in duration-500">
+          <div className="lg:col-span-2 space-y-6">
+            
+            {/* Arena Round info card */}
+            <div className="rounded-3xl border border-emerald-500/30 p-6 bg-gradient-to-br from-emerald-950/20 to-zinc-950 space-y-5">
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="px-2.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] uppercase tracking-widest font-black rounded-full">
+                    {arenaRound === "QUARTER" ? "Quarterfinals" : arenaRound === "SEMI" ? "Semifinals" : "Final Arena Duel"}
+                  </span>
+                  <h2 className="text-2xl font-black text-white mt-3">Evolution & Mutation Phase</h2>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Select biological modifications to draft before the auto-clash. Environmental modifiers are active!
+                  </p>
+                </div>
+                <div className="bg-emerald-950/40 border border-emerald-500/30 px-5 py-3 rounded-2xl text-center">
+                  <span className="text-[9px] uppercase font-bold text-emerald-400 block tracking-wider">DNA Budget</span>
+                  <span className="text-3xl font-black text-white flex items-center justify-center gap-1">
+                    <Dna className="h-6 w-6 text-emerald-400" />
+                    {arenaParticipants.find(p => p.id === "player")?.dna || 0}
+                  </span>
+                </div>
+              </div>
+
+              {/* Active environmental event display */}
+              <div className="p-4 bg-white/5 border border-white/5 rounded-2xl flex items-start gap-3">
+                <span className="text-3xl">{currentEnvEvent.emoji}</span>
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    Active Threat: {currentEnvEvent.name}
+                  </h4>
+                  <p className="text-xs text-gray-400 mt-0.5">{currentEnvEvent.description}</p>
+                  <p className="text-xs text-yellow-500 font-extrabold mt-1.5">⚠️ Modifiers: {currentEnvEvent.effect}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Mutation Drafting Grid */}
+            <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 space-y-4">
+              <h3 className="text-sm font-black text-white uppercase tracking-wider">Mutations Catalog</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {MUTATIONS.map(mut => {
+                  const player = arenaParticipants.find(p => p.id === "player")!
+                  const owned = player.mutations.includes(mut.id)
+                  const cannotAfford = player.dna < mut.cost
+
+                  return (
+                    <div key={mut.id} 
+                      className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${owned ? "border-emerald-500/50 bg-emerald-950/15" : "border-white/5 bg-white/5 hover:border-white/10"}`}>
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-start">
+                          <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                            <span className="text-xl">{mut.emoji}</span> {mut.name}
+                          </h4>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${mut.branch === "offensive" ? "bg-red-500/10 text-red-400" : mut.branch === "defensive" ? "bg-blue-500/10 text-blue-400" : "bg-purple-500/10 text-purple-400"}`}>
+                            {mut.branch}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-400 leading-relaxed">{mut.description}</p>
+                        <p className="text-[10px] text-gray-500 italic">⭐ Special: {mut.specialEffect}</p>
+                      </div>
+
+                      <div className="flex gap-2 mt-4 pt-3 border-t border-white/5">
+                        {owned ? (
+                          <Button onClick={() => refundArenaMutation(mut.id)} size="sm" className="w-full bg-red-950/30 hover:bg-red-900/30 border border-red-500/20 text-red-400 text-xs font-bold rounded-xl py-2 h-auto">
+                            Refund (+{mut.cost} DNA)
+                          </Button>
+                        ) : (
+                          <Button 
+                            disabled={cannotAfford}
+                            onClick={() => evolveArenaMutation(mut)} 
+                            size="sm" 
+                            className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 text-white text-xs font-bold rounded-xl py-2 h-auto"
+                          >
+                            Draft ({mut.cost} DNA)
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+          </div>
+
+          {/* Right Evolution sidebar */}
+          <div className="space-y-6">
+            
+            {/* Player's Organism Details */}
+            {arenaParticipants.find(p => p.id === "player") && (() => {
+              const player = arenaParticipants.find(p => p.id === "player")!
+              return (
+                <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 space-y-6">
+                  <div className="text-center">
+                    <span className="text-4xl block mb-2 animate-bounce">🦠</span>
+                    <h3 className="text-lg font-black text-white">{player.name}</h3>
+                    <p className="text-xs text-emerald-400 font-bold uppercase tracking-widest mt-1">
+                      {player.synergyClass || "Neutral Organism"}
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Organism Stats</h4>
+                    <div className="grid grid-cols-2 gap-2 text-center text-xs">
+                      <div className="p-2.5 bg-white/5 border border-white/5 rounded-xl">
+                        <span className="text-gray-400 block text-[9px] uppercase font-bold">Attack</span>
+                        <span className="font-extrabold text-white">{player.attack}</span>
+                      </div>
+                      <div className="p-2.5 bg-white/5 border border-white/5 rounded-xl">
+                        <span className="text-gray-400 block text-[9px] uppercase font-bold">Defense</span>
+                        <span className="font-extrabold text-white">{player.defense}</span>
+                      </div>
+                      <div className="p-2.5 bg-white/5 border border-white/5 rounded-xl">
+                        <span className="text-gray-400 block text-[9px] uppercase font-bold">Speed</span>
+                        <span className="font-extrabold text-white">{player.speed}</span>
+                      </div>
+                      <div className="p-2.5 bg-white/5 border border-white/5 rounded-xl">
+                        <span className="text-gray-400 block text-[9px] uppercase font-bold">HP Max</span>
+                        <span className="font-extrabold text-white">{player.hpMax}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Active drafted mutations list */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Active Adaptations</h4>
+                    {player.mutations.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {player.mutations.map(mId => {
+                          const m = MUTATIONS.find(x => x.id === mId)
+                          return (
+                            <span key={mId} className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold rounded-lg flex items-center gap-1">
+                              {m?.emoji} {m?.name}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-gray-500 italic">No mutations drafted this round.</p>
+                    )}
+                  </div>
+
+                  {/* Synergy Path unlocking checklist */}
+                  <div className="space-y-3 border-t border-white/5 pt-4">
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Evolution Paths</h4>
+                    <div className="space-y-2">
+                      {SYNERGY_PATHS.map(path => {
+                        const count = path.mutationsNeeded.filter(mId => player.mutations.includes(mId)).length
+                        const isFull = count === path.mutationsNeeded.length
+
+                        return (
+                          <div key={path.id} className={`p-2 rounded-xl border text-xs ${isFull ? "border-emerald-500/40 bg-emerald-500/5 text-emerald-400" : "border-white/5 bg-white/5 text-gray-400"}`}>
+                            <div className="flex justify-between font-bold">
+                              <span>{path.emoji} {path.name}</span>
+                              <span>{count} / {path.mutationsNeeded.length}</span>
+                            </div>
+                            <p className="text-[9px] text-gray-500 mt-1 leading-normal">{path.description}</p>
+                            {isFull && <p className="text-[9px] text-emerald-500 font-extrabold mt-1">✓ Synergy unlocked: {path.bonus}</p>}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <Button onClick={lockArenaEvolution} className="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-extrabold py-5 rounded-2xl text-sm shadow-lg shadow-emerald-500/20 hover:scale-[1.01] transition-all gap-2">
+                    Lock Evolution & Combat <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )
+            })()}
+
+          </div>
+        </div>
+      )}
+
+      {/* ── EVOLUTION ARENA: BATTLE PHASE (AUTO-BATTLE RESOLUTION) ────────── */}
+      {phase === "ARENA_BATTLE" && activeArenaMatch && (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          
+          {/* Main matchup banner */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center bg-zinc-950 p-8 rounded-3xl border border-white/10 relative overflow-hidden">
+            
+            {/* Player Creature Profile */}
+            <div className="text-center space-y-4 md:col-span-1">
+              <div className="relative inline-block">
+                <span className="text-7xl block animate-pulse">🦠</span>
+                {/* Float mutation symbols around core */}
+                <div className="absolute -top-2 -left-2 flex gap-1">
+                  {activeArenaMatch.p1.mutations.slice(0, 3).map(mId => (
+                    <span key={mId} className="text-xl" title={mId}>{MUTATIONS.find(x => x.id === mId)?.emoji}</span>
+                  ))}
+                </div>
+                <div className="absolute -bottom-2 -right-2 flex gap-1">
+                  {activeArenaMatch.p1.mutations.slice(3).map(mId => (
+                    <span key={mId} className="text-xl" title={mId}>{MUTATIONS.find(x => x.id === mId)?.emoji}</span>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">{activeArenaMatch.p1.name}</h3>
+                <span className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded text-[9px] font-black text-emerald-400 uppercase">
+                  {activeArenaMatch.p1.synergyClass || "Standard"}
+                </span>
+                <p className="text-[10px] text-gray-500 mt-1">⚔️ {activeArenaMatch.p1.attack} | 🛡️ {activeArenaMatch.p1.defense} | 💨 {activeArenaMatch.p1.speed}</p>
+              </div>
+            </div>
+
+            {/* Clash middle icon */}
+            <div className="text-center space-y-2 md:col-span-1">
+              <span className="text-[10px] font-bold text-red-500 uppercase tracking-widest block">Survival Duel</span>
+              <div className="inline-flex p-4 bg-red-950/20 border border-red-500/20 text-red-400 rounded-full text-2xl font-black">
+                VS
+              </div>
+              <span className="text-[10px] text-gray-500 block">Auto-clash simulation</span>
+            </div>
+
+            {/* Opponent Profile */}
+            <div className="text-center space-y-4 md:col-span-1">
+              <div className="relative inline-block">
+                <span className="text-7xl block animate-pulse">{activeArenaMatch.p2.emoji}</span>
+                <div className="absolute -top-2 -left-2 flex gap-1">
+                  {activeArenaMatch.p2.mutations.slice(0, 3).map(mId => (
+                    <span key={mId} className="text-xl" title={mId}>{MUTATIONS.find(x => x.id === mId)?.emoji}</span>
+                  ))}
+                </div>
+                <div className="absolute -bottom-2 -right-2 flex gap-1">
+                  {activeArenaMatch.p2.mutations.slice(3).map(mId => (
+                    <span key={mId} className="text-xl" title={mId}>{MUTATIONS.find(x => x.id === mId)?.emoji}</span>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">{activeArenaMatch.p2.name}</h3>
+                <span className="px-2 py-0.5 bg-red-500/10 border border-red-500/20 rounded text-[9px] font-black text-red-400 uppercase">
+                  {activeArenaMatch.p2.synergyClass || "Standard"}
+                </span>
+                <p className="text-[10px] text-gray-500 mt-1">⚔️ {activeArenaMatch.p2.attack} | 🛡️ {activeArenaMatch.p2.defense} | 💨 {activeArenaMatch.p2.speed}</p>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Combat Feed & Logs */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
+            
+            {/* Logs chronological feed */}
+            <div className="lg:col-span-2 rounded-3xl border border-white/10 bg-zinc-950 p-6 flex flex-col justify-between space-y-4">
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-red-400" /> Simulation Feed
+                </h4>
+                <div ref={logContainerRef} className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
+                  {arenaLogs.map((log, idx) => {
+                    const isOver = log.includes("BATTLE OVER") || log.includes("MATCH OVER")
+                    const isPlayerDmg = log.includes("Player Organism strikes") || log.includes(username + " strikes")
+                    const isPlayerHeal = log.includes("Core furnace heals") && (log.includes("Player Organism") || log.includes(username))
+
+                    return (
+                      <div key={idx} 
+                        className={`p-3 rounded-xl border text-xs leading-relaxed ${isOver ? "bg-yellow-500/10 border-yellow-500/30 text-yellow-300 font-extrabold" : isPlayerDmg ? "bg-emerald-950/20 border-emerald-500/20 text-emerald-300" : isPlayerHeal ? "bg-green-950/20 border-green-500/20 text-green-300" : "bg-white/5 border-white/5 text-gray-400"}`}>
+                        {log}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {!isSimulatingLogs && (
+                <div className="pt-2">
+                  <Button onClick={() => setPhase("ARENA_BRACKET")} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-4 rounded-xl">
+                    View Tournament Bracket Results <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* Combat Side Stats / Synergy Summary */}
+            <div className="rounded-3xl border border-white/5 bg-white/5 p-6 space-y-5">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-300">Organism Adaptations</h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <h4 className="text-xs font-bold text-white mb-2">{activeArenaMatch.p1.name} Mutations:</h4>
+                  <div className="flex flex-wrap gap-1.5">
+                    {activeArenaMatch.p1.mutations.map(mId => (
+                      <span key={mId} className="px-2 py-0.5 bg-white/5 border border-white/5 rounded text-[10px] text-gray-300">
+                        {MUTATIONS.find(x => x.id === mId)?.emoji} {MUTATIONS.find(x => x.id === mId)?.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="border-t border-white/5 pt-4">
+                  <h4 className="text-xs font-bold text-white mb-2">{activeArenaMatch.p2.name} Mutations:</h4>
+                  <div className="flex flex-wrap gap-1.5">
+                    {activeArenaMatch.p2.mutations.map(mId => (
+                      <span key={mId} className="px-2 py-0.5 bg-white/5 border border-white/5 rounded text-[10px] text-gray-300">
+                        {MUTATIONS.find(x => x.id === mId)?.emoji} {MUTATIONS.find(x => x.id === mId)?.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* ── EVOLUTION ARENA: VISUAL TOURNAMENT BRACKET SCREEN ───────────────── */}
+      {phase === "ARENA_BRACKET" && (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          
+          <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 space-y-6">
+            <div className="text-center">
+              <span className="px-2.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] uppercase tracking-widest font-black rounded-full">
+                Tournament Tree
+              </span>
+              <h2 className="text-2xl font-black text-white mt-3">Ecosystem Bracket System</h2>
+              <p className="text-xs text-gray-400">Survival of the fittest. Watch which adaptive pathways dominate the matches.</p>
+            </div>
+
+            {/* Bracket visual representation */}
+            <div className="grid grid-cols-3 gap-4 items-center pt-6 max-w-3xl mx-auto border-t border-white/5">
+              
+              {/* Quarterfinals columns */}
+              <div className="space-y-6">
+                <h4 className="text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest">Quarterfinals</h4>
+                
+                {[0, 2, 4, 6].map(idx => {
+                  const m = arenaMatches.find(x => x.round === "QUARTER" && (x.p1.id === arenaParticipants[idx].id || x.p1.id === arenaParticipants[idx+1].id))
+                  const p1 = arenaParticipants[idx]
+                  const p2 = arenaParticipants[idx+1]
+                  const won1 = m?.winnerId === p1.id
+                  const won2 = m?.winnerId === p2.id
+
+                  return (
+                    <div key={idx} className="p-3 bg-white/5 border border-white/5 rounded-2xl space-y-2 text-xs">
+                      <div className={`flex justify-between items-center ${p1.status === "eliminated" ? "text-gray-600 line-through" : won1 ? "text-emerald-400 font-bold" : "text-white"}`}>
+                        <span>{p1.emoji} {p1.name}</span>
+                        {won1 && <span className="text-[10px] bg-emerald-500/20 px-1.5 rounded">W</span>}
+                      </div>
+                      <div className={`flex justify-between items-center ${p2.status === "eliminated" ? "text-gray-600 line-through" : won2 ? "text-emerald-400 font-bold" : "text-white"}`}>
+                        <span>{p2.emoji} {p2.name}</span>
+                        {won2 && <span className="text-[10px] bg-emerald-500/20 px-1.5 rounded">W</span>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Semifinals column */}
+              <div className="space-y-16">
+                <h4 className="text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest">Semifinals</h4>
+                
+                {[0, 1].map(idx => {
+                  const qWinners = arenaMatches.filter(x => x.round === "QUARTER").map(x => x.winnerId)
+                  // Semi match pairing
+                  const m = arenaMatches.find(x => x.round === "SEMI" && x.id === `match-S-${idx}`)
+                  const p1 = arenaParticipants.find(x => x.id === qWinners[idx * 2])
+                  const p2 = arenaParticipants.find(x => x.id === qWinners[idx * 2 + 1])
+
+                  return (
+                    <div key={idx} className="p-3 bg-white/5 border border-white/5 rounded-2xl space-y-2 text-xs">
+                      {p1 ? (
+                        <div className={`flex justify-between items-center ${p1.status === "eliminated" ? "text-gray-600 line-through" : m?.winnerId === p1.id ? "text-emerald-400 font-bold" : "text-white"}`}>
+                          <span>{p1.emoji} {p1.name}</span>
+                          {m?.winnerId === p1.id && <span className="text-[10px] bg-emerald-500/20 px-1.5 rounded">W</span>}
+                        </div>
+                      ) : (
+                        <span className="text-gray-600 block italic">Undecided</span>
+                      )}
+                      
+                      {p2 ? (
+                        <div className={`flex justify-between items-center ${p2.status === "eliminated" ? "text-gray-600 line-through" : m?.winnerId === p2.id ? "text-emerald-400 font-bold" : "text-white"}`}>
+                          <span>{p2.emoji} {p2.name}</span>
+                          {m?.winnerId === p2.id && <span className="text-[10px] bg-emerald-500/20 px-1.5 rounded">W</span>}
+                        </div>
+                      ) : (
+                        <span className="text-gray-600 block italic">Undecided</span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Finals column */}
+              <div className="space-y-36">
+                <h4 className="text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest">Finals</h4>
+
+                {(() => {
+                  const sWinners = arenaMatches.filter(x => x.round === "SEMI").map(x => x.winnerId)
+                  const m = arenaMatches.find(x => x.round === "FINAL")
+                  const p1 = arenaParticipants.find(x => x.id === sWinners[0])
+                  const p2 = arenaParticipants.find(x => x.id === sWinners[1])
+
+                  return (
+                    <div className="p-4 bg-emerald-950/20 border border-emerald-500/20 rounded-2xl space-y-3 text-xs shadow-lg shadow-emerald-500/10">
+                      {p1 ? (
+                        <div className={`flex justify-between items-center ${p1.status === "eliminated" ? "text-gray-600 line-through" : m?.winnerId === p1.id ? "text-yellow-400 font-black animate-pulse" : "text-white"}`}>
+                          <span>👑 {p1.name}</span>
+                          {m?.winnerId === p1.id && <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 rounded">APEX</span>}
+                        </div>
+                      ) : (
+                        <span className="text-gray-600 block italic">Undecided</span>
+                      )}
+
+                      {p2 ? (
+                        <div className={`flex justify-between items-center ${p2.status === "eliminated" ? "text-gray-600 line-through" : m?.winnerId === p2.id ? "text-yellow-400 font-black animate-pulse" : "text-white"}`}>
+                          <span>👑 {p2.name}</span>
+                          {m?.winnerId === p2.id && <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 rounded">APEX</span>}
+                        </div>
+                      ) : (
+                        <span className="text-gray-600 block italic">Undecided</span>
+                      )}
+                    </div>
+                  )
+                })()}
+              </div>
+
+            </div>
+
+            {/* Bottom transition controls */}
+            <div className="flex gap-4 pt-6 border-t border-white/5">
+              {arenaOutcome === "defeat" ? (
+                <Button onClick={() => setPhase("ARENA_RESULTS")} className="w-full bg-red-600 hover:bg-red-500 text-white font-extrabold py-4 rounded-xl">
+                  Species Eliminated. Proceed to Leaderboard <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              ) : arenaRound === "FINAL" && arenaMatches.find(x => x.round === "FINAL")?.winnerId !== null ? (
+                <Button onClick={nextArenaRound} className="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-extrabold py-4 rounded-xl">
+                  Claim Apex Victory! <Crown className="h-4 w-4 ml-1.5 text-yellow-400" />
+                </Button>
+              ) : (
+                <Button onClick={nextArenaRound} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-4 rounded-xl">
+                  Advance to Next Mutation Round <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              )}
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* ── EVOLUTION ARENA: TOURNAMENT RESULTS SCREEN ───────────────────────── */}
+      {phase === "ARENA_RESULTS" && (
+        <div className={`max-w-md mx-auto border p-8 rounded-3xl text-center space-y-6 ${arenaOutcome === "defeat" ? "bg-gradient-to-br from-red-950/60 via-zinc-900 to-black border-red-500/40" : "bg-gradient-to-br from-emerald-900/40 via-zinc-900 to-black border-emerald-500/30"}`}
+          style={arenaOutcome === "victory" ? { boxShadow: "0 0 60px 20px rgba(16,185,129,0.15)" } : undefined}>
+          
+          <div className={`inline-flex p-4 rounded-full ${arenaOutcome === "defeat" ? "bg-red-500/10 border border-red-500/30 text-red-500" : "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 animate-bounce"}`}>
+            {arenaOutcome === "defeat" ? <AlertTriangle className="h-10 w-10 animate-pulse" /> : <Crown className="h-10 w-10 text-yellow-400" />}
+          </div>
+
+          <div>
+            <h2 className="text-2xl font-black text-white">
+              {arenaOutcome === "defeat" ? "💀 Elimination Terminated" : "🏆 Apex Species Crowned!"}
+            </h2>
+            <p className="text-xs text-gray-400 max-w-xs mx-auto mt-2 leading-relaxed">
+              {arenaOutcome === "defeat" ? "Your organism failed to adapt to the environmental challenges and was eliminated." : "Congratulations! Your species Adapted and Conquered the arena."}
+            </p>
+          </div>
+
+          {/* Ranking summary list */}
+          <div className="bg-black/60 border border-white/5 p-4 rounded-2xl space-y-3 text-left">
+            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Tournament Rankings</h4>
+            <div className="space-y-1.5 text-xs text-white">
+              {arenaParticipants
+                .map(p => ({
+                  ...p,
+                  scoreRank: p.status === "alive" ? 1 : p.rank || 8
+                }))
+                .sort((a, b) => a.scoreRank - b.scoreRank)
+                .slice(0, 4)
+                .map((p, idx) => (
+                  <div key={p.id} className="flex justify-between items-center py-1 border-b border-white/5 last:border-0">
+                    <span className="font-bold flex items-center gap-1.5">
+                      <span>{idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : "🐾"}</span>
+                      {p.name} {p.id === "player" && <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1 rounded">You</span>}
+                    </span>
+                    <span className="text-gray-400">
+                      {p.scoreRank === 1 ? "Winner" : `${p.scoreRank}th place`}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          </div>
+
+          {arenaOutcome === "victory" ? (
+            <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl text-xs text-emerald-300 font-bold">
+              🪙 +10 PlayLab Coins earned!
+            </div>
+          ) : (
+            <div className="bg-red-500/5 border border-red-500/20 p-3 rounded-xl text-xs text-red-300 font-bold">
+              Better luck next adaptation!
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <Button onClick={startEvolutionArena} className={`flex-1 ${arenaOutcome === "defeat" ? "bg-red-700 hover:bg-red-600" : "bg-emerald-600 hover:bg-emerald-500"} font-extrabold py-3.5 rounded-2xl text-xs text-white`}>
+              <RotateCcw className="h-4 w-4 mr-1" /> Re-Evolve Species
+            </Button>
+            <Button onClick={exitArenaMode} className="flex-1 bg-white/5 hover:bg-white/10 text-gray-300 rounded-2xl py-3.5 text-xs border border-white/10">
+              Main Menu
+            </Button>
+          </div>
+
+        </div>
+      )}
+
+
+      {/* ── PLAYING SOLO SCREEN (SOLO RPG TRAINING MODE) ───────────────────────── */}
       {phase === "PLAYING_SOLO" && activeEnemy && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
           <div className="lg:col-span-2 space-y-5">
@@ -1020,7 +2193,7 @@ export default function CreatureForgePage() {
             <div className="rounded-3xl border border-emerald-500/30 p-6 bg-gradient-to-br from-emerald-950/30 to-zinc-900 space-y-5">
               <div className="flex justify-between items-center">
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-widest">Stage {campaignStage} (Solo Campaign)</span>
+                  <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-widest">Stage {campaignStage} (Solo Campaign Training)</span>
                   <h2 className="text-xl font-black text-white">🦠 {creature.name} (Lv.{creature.level})</h2>
                 </div>
                 <div className="text-right">
@@ -1170,7 +2343,7 @@ export default function CreatureForgePage() {
         </div>
       )}
 
-      {/* ── PLAYING COOP SCREEN ────────────────────────────────────────────────── */}
+      {/* ── PLAYING COOP SCREEN (CO-OP RAID BOSSES) ────────────────────────────── */}
       {phase === "PLAYING_COOP" && raidBoss && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
           <div className="lg:col-span-2 space-y-5">
