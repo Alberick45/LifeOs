@@ -463,8 +463,6 @@ export default function SecretCardHuntPage() {
       const pointsWon = target.secretCard.rarity === "Hard" ? 150 : target.secretCard.rarity === "Medium" ? 100 : 50
       setPlayers(prev => prev.map(p => p.id === "player" ? { ...p, points: p.points + pointsWon } : p))
       triggerAlert(`Found target! +${pointsWon} points!`, true)
-
-      checkMatchOver()
     } else {
       pushLog(`❌ INCORRECT! Your deduction was wrong. Penalty: unable to guess for 1 turn.`, "system")
       setPlayers(prev => prev.map(p => p.id === "player" ? { ...p, stunnedTurns: 2 } : p))
@@ -528,14 +526,57 @@ export default function SecretCardHuntPage() {
     advanceTurn()
   }
 
-  // ─── BOT ACTION RESOLUTIONS ────────────────────────────────────────────────
-  const executeBotTurn = (bot: PlayerState) => {
-    if (bot.status === "revealed") {
-      advanceTurn()
+  // ─── REACTIVE TURN AND MATCH CONTROLLERS ────────────────────────────────────
+
+  // 1. Reactive Bot and Turn Manager to avoid synchronous call stack overflow
+  useEffect(() => {
+    if (phase !== "PLAYING") return
+    const activePlayer = players[currentTurnIndex]
+    if (!activePlayer) return
+
+    // Skip revealed (eliminated) players instantly without creating a stack call
+    if (activePlayer.status === "revealed") {
+      const nextIndex = (currentTurnIndex + 1) % players.length
+      setCurrentTurnIndex(nextIndex)
       return
     }
 
-    pushLog(`⏳ ${bot.name} is examining cards...`, "system")
+    // Trigger Bot action asynchronously
+    if (activePlayer.isBot) {
+      const timer = setTimeout(() => {
+        executeBotTurn(activePlayer)
+      }, 1500)
+      return () => clearTimeout(timer)
+    }
+  }, [currentTurnIndex, phase, players])
+
+  // 2. Reactive Victory Controller
+  useEffect(() => {
+    if (phase !== "PLAYING") return
+    const hidden = players.filter(p => p.status === "hidden")
+
+    if (mode === "CLASSIC" && hidden.length === 1) {
+      const survivor = hidden[0]
+      pushLog(`👑 MATCH COMPLETE! The last hidden player is ${survivor.name}!`, "system")
+
+      setTimeout(() => {
+        setPhase("RESULTS")
+        const playerState = players.find(p => p.id === "player")!
+        const playerWon = survivor.id === "player"
+        const pointsTotal = playerState.points + (playerWon ? 200 : 0)
+
+        if (playerWon) {
+          const nextCoins = adjustCoins(userId, Math.floor(pointsTotal / 10))
+          setCoins(nextCoins)
+          saveHighScore(userId, "secret_card_hunt", pointsTotal)
+        }
+      }, 1500)
+    }
+  }, [players, phase, mode, userId])
+
+  // ─── BOT ACTION RESOLUTIONS ────────────────────────────────────────────────
+  const executeBotTurn = (bot: PlayerState) => {
+    pushLog(`⏳ ${bot.name} is formulating a deduction...`, "system")
 
     setTimeout(() => {
       // Find alive target
@@ -547,24 +588,32 @@ export default function SecretCardHuntPage() {
 
       const target = targets[Math.floor(Math.random() * targets.length)]
 
-      // AI logic: check possibilities list
-      // If AI only has 1 or 2 options left, make a guess!
+      // AI logic: check guess potential
       const isHard = difficulty === "HARD" || difficulty === "NORMAL"
       const guessChance = isHard ? 0.35 : 0.15
 
       if (Math.random() < guessChance) {
         // Guess target card
-        const cardName = target.secretCard.name
-        pushLog(`🎯 ${bot.name} guessed: ${target.name}'s card is ${cardName}!`, "guess")
+        const possibleTargetCards = activePack.filter(c => c.name !== bot.secretCard.name)
+        const guessCard = possibleTargetCards[Math.floor(Math.random() * possibleTargetCards.length)]
+        pushLog(`🎯 ${bot.name} guessed: ${target.name}'s card is ${guessCard.name}!`, "guess")
         
-        // Bots guess correctly if their logic gets hot
-        const correct = Math.random() < (difficulty === "HARD" ? 0.6 : 0.3)
+        const correct = guessCard.name.toLowerCase() === target.secretCard.name.toLowerCase()
         if (correct) {
           pushLog(`✅ CORRECT! ${target.name}'s secret card was revealed: ${target.secretCard.emoji} ${target.secretCard.name}!`, "system")
-          setPlayers(prev => prev.map(p => p.id === target.id ? { ...p, status: "revealed" as const, revealedBy: bot.id } : p))
-          checkMatchOver()
+          
+          setPlayers(prev => prev.map(p => {
+            if (p.id === target.id) {
+              return { ...p, status: "revealed" as const, revealedBy: bot.id }
+            }
+            if (p.id === bot.id) {
+              const pointsWon = target.secretCard.rarity === "Hard" ? 150 : target.secretCard.rarity === "Medium" ? 100 : 50
+              return { ...p, points: p.points + pointsWon }
+            }
+            return p
+          }))
         } else {
-          pushLog(`❌ INCORRECT! ${bot.name} made a wrong deduction.`, "system")
+          pushLog(`❌ INCORRECT! ${bot.name} made a wrong guess.`, "system")
         }
         advanceTurn()
       } else {
@@ -574,7 +623,7 @@ export default function SecretCardHuntPage() {
         const targetValue = target.secretCard.attributes[key]
 
         if (target.id === "player") {
-          // Send incoming query prompt to player
+          // Send query prompt to player
           setIncomingQuestion({
             askerId: bot.id,
             questionText: `Is your secret card ${key} equal to '${targetValue}'?`,
@@ -584,13 +633,9 @@ export default function SecretCardHuntPage() {
           })
           pushLog(`❓ ${bot.name} asked You: "Is your ${key} ${targetValue}?"`, "question")
         } else {
-          // Ask another bot
-          pushLog(`❓ ${bot.name} asked ${target.name}: "Is your ${key} ${targetValue}?"`, "question")
-          const answer = targetValue ? "Yes" : "No"
-          setTimeout(() => {
-            pushLog(`💬 ${target.name} replied: "${answer}"`, "answer")
-            advanceTurn()
-          }, 600)
+          // Ask another bot (keep answer private from user/feed logs)
+          pushLog(`🤔 ${bot.name} asked ${target.name} a question. (Answer kept secret)`, "question")
+          advanceTurn()
         }
       }
     }, 1000)
@@ -598,26 +643,20 @@ export default function SecretCardHuntPage() {
 
   // ─── GAME STATE ADVANCEMENT ────────────────────────────────────────────────
   const advanceTurn = () => {
-    let nextIndex = (currentTurnIndex + 1) % players.length
-    
-    // Check if round is fully advanced
+    const nextIndex = (currentTurnIndex + 1) % players.length
+
     if (nextIndex === 0) {
-      const nextTurn = matchTurnCount + 1
-      setMatchTurnCount(nextTurn)
-      
-      // Global clue system (Every 3 turns)
-      if (nextTurn % 3 === 0) {
-        broadcastGlobalClue()
-      }
+      setMatchTurnCount(prev => {
+        const nextTurn = prev + 1
+        // Global clue system
+        if (nextTurn % 3 === 0) {
+          broadcastGlobalClue()
+        }
+        return nextTurn
+      })
     }
 
     setCurrentTurnIndex(nextIndex)
-
-    // Trigger next turn
-    const nextPlayer = players[nextIndex]
-    if (nextPlayer && nextPlayer.isBot) {
-      executeBotTurn(nextPlayer)
-    }
   }
 
   // Broadcast a global random clue about an undiscovered card
@@ -629,33 +668,6 @@ export default function SecretCardHuntPage() {
       const clue = cluesList[Math.floor(Math.random() * cluesList.length)]
 
       pushLog(`📢 BROADCAST CLUE: One of the hidden cards is: "${clue}"`, "clue")
-    }
-  }
-
-  // Check victory condition
-  const checkMatchOver = () => {
-    const hidden = players.filter(p => p.status === "hidden")
-    
-    if (mode === "CLASSIC") {
-      if (hidden.length === 1) {
-        const survivor = hidden[0]
-        pushLog(`👑 MATCH COMPLETE! The last hidden player is ${survivor.name}!`, "system")
-        
-        setTimeout(() => {
-          concludeMatch(survivor.id === "player")
-        }, 1500)
-      }
-    }
-  }
-
-  const concludeMatch = (playerWon: boolean) => {
-    setPhase("RESULTS")
-    const playerState = players.find(p => p.id === "player")!
-    const pointsTotal = playerState.points + (playerWon ? 200 : 0)
-    
-    if (playerWon) {
-      setCoins(prev => prev + Math.floor(pointsTotal / 10))
-      saveHighScore(userId, "secret_card_hunt", pointsTotal)
     }
   }
 
