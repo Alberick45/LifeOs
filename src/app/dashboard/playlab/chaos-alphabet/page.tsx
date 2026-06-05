@@ -736,7 +736,8 @@ export default function ChaosAlphabetPage() {
 
       Object.keys(presenceState).forEach(key => {
         const presences = presenceState[key] as any[]
-        presences.forEach(pres => {
+        if (presences.length > 0) {
+          const pres = presences[0]
           mappedPlayers.push({
             presenceId: key,
             name: pres.name || "Anonymous",
@@ -746,7 +747,7 @@ export default function ChaosAlphabetPage() {
             answers: pres.answers || {},
             submitTime: pres.submitTime || null,
           })
-        })
+        }
       })
 
       setPlayers(mappedPlayers)

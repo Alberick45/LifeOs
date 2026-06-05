@@ -103,6 +103,17 @@ export default function PlayLabPage() {
       borderColor: "border-emerald-500/30",
       href: "/dashboard/playlab/secret-card-hunt",
       locked: false
+    },
+    {
+      id: "kingdom-rushboard",
+      title: "Kingdom Rushboard",
+      description: "A living board strategy game. Build villages, grow populations, throw enemies in jail, and face off in tactical PvP duels on the race to the Throne.",
+      icon: <Sword className="h-8 w-8 text-orange-400 animate-pulse" />,
+      type: "Multiplayer",
+      color: "from-amber-950/40 to-orange-900/20",
+      borderColor: "border-orange-500/30",
+      href: "/dashboard/playlab/kingdom-rushboard",
+      locked: false
     }
   ]
 

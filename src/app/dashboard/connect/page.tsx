@@ -20,6 +20,7 @@ export default function ConnectPage() {
   // Requests State
   const [incomingRequests, setIncomingRequests] = useState<any[]>([])
   const [outgoingRequests, setOutgoingRequests] = useState<any[]>([])
+  const [verifiedLinks, setVerifiedLinks] = useState<any[]>([])
 
   useEffect(() => {
     const init = async () => {
@@ -42,23 +43,75 @@ export default function ConnectPage() {
   }, [])
 
   const fetchRequests = async (userId: string) => {
-    // Fetch incoming
-    const { data: incoming } = await supabase
-      .from('link_requests')
-      .select('*, profiles!link_requests_sender_id_fkey(handle, avatar_url)')
-      .eq('receiver_id', userId)
-      .eq('status', 'pending')
-    
-    if (incoming) setIncomingRequests(incoming)
+    try {
+      // 1. Fetch incoming requests
+      const { data: incoming, error: incomingErr } = await supabase
+        .from('link_requests')
+        .select('*')
+        .eq('receiver_id', userId)
+        .eq('status', 'pending')
+      
+      if (incomingErr) throw incomingErr
 
-    // Fetch outgoing
-    const { data: outgoing } = await supabase
-      .from('link_requests')
-      .select('*, profiles!link_requests_receiver_id_fkey(handle, avatar_url)')
-      .eq('sender_id', userId)
-      .eq('status', 'pending')
-    
-    if (outgoing) setOutgoingRequests(outgoing)
+      // 2. Fetch outgoing requests
+      const { data: outgoing, error: outgoingErr } = await supabase
+        .from('link_requests')
+        .select('*')
+        .eq('sender_id', userId)
+        .eq('status', 'pending')
+      
+      if (outgoingErr) throw outgoingErr
+
+      // 3. Fetch verified links
+      const { data: verified, error: verifiedErr } = await supabase
+        .from('verified_links')
+        .select('*')
+        .or(`user_a.eq.${userId},user_b.eq.${userId}`)
+      
+      if (verifiedErr) throw verifiedErr
+      setVerifiedLinks(verified || [])
+
+      // 4. Resolve profiles in memory to avoid postgrest relation errors
+      const profileIds = new Set<string>()
+      if (incoming) incoming.forEach(r => profileIds.add(r.sender_id))
+      if (outgoing) outgoing.forEach(r => profileIds.add(r.receiver_id))
+
+      if (profileIds.size > 0) {
+        const { data: profiles, error: profilesErr } = await supabase
+          .from('profiles')
+          .select('id, handle, avatar_url')
+          .in('id', Array.from(profileIds))
+
+        if (profilesErr) throw profilesErr
+
+        const profileMap = new Map(profiles?.map(p => [p.id, p]) || [])
+
+        if (incoming) {
+          const mappedIncoming = incoming.map(r => ({
+            ...r,
+            profiles: profileMap.get(r.sender_id) || null
+          }))
+          setIncomingRequests(mappedIncoming)
+        } else {
+          setIncomingRequests([])
+        }
+
+        if (outgoing) {
+          const mappedOutgoing = outgoing.map(r => ({
+            ...r,
+            profiles: profileMap.get(r.receiver_id) || null
+          }))
+          setOutgoingRequests(mappedOutgoing)
+        } else {
+          setOutgoingRequests([])
+        }
+      } else {
+        setIncomingRequests([])
+        setOutgoingRequests([])
+      }
+    } catch (e) {
+      console.error("Failed to fetch requests/links:", e)
+    }
   }
 
   const handleSearch = async () => {
@@ -163,6 +216,22 @@ export default function ConnectPage() {
     }
   }
 
+  const getProfileConnectionState = (profileId: string) => {
+    // Check if verified connected
+    const isConnected = verifiedLinks.some(v => v.user_a === profileId || v.user_b === profileId)
+    if (isConnected) return "CONNECTED"
+
+    // Check if pending outgoing
+    const isOutgoing = outgoingRequests.some(r => r.receiver_id === profileId)
+    if (isOutgoing) return "PENDING_OUTGOING"
+
+    // Check if pending incoming
+    const isIncoming = incomingRequests.some(r => r.sender_id === profileId)
+    if (isIncoming) return "PENDING_INCOMING"
+
+    return "NONE"
+  }
+
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
       <div className="flex items-center gap-3">
@@ -196,23 +265,51 @@ export default function ConnectPage() {
           </div>
 
           <div className="space-y-3">
-            {results.map(profile => (
-              <div key={profile.id} className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10">
-                <div className="flex items-center gap-3">
-                  {profile.avatar_url ? (
-                    <img src={profile.avatar_url} className="w-10 h-10 rounded-full object-cover" />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-xs">@</div>
-                  )}
-                  <div>
-                    <p className="font-medium">@{profile.handle}</p>
+            {results.map(profile => {
+              const connState = getProfileConnectionState(profile.id)
+              return (
+                <div key={profile.id} className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10">
+                  <div className="flex items-center gap-3">
+                    {profile.avatar_url ? (
+                      <img src={profile.avatar_url} className="w-10 h-10 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-xs">@</div>
+                    )}
+                    <div>
+                      <p className="font-medium">@{profile.handle}</p>
+                    </div>
                   </div>
+                  
+                  {connState === "CONNECTED" && (
+                    <span className="text-xs font-bold text-green-400 bg-green-500/10 border border-green-500/20 px-3 py-1.5 rounded-lg flex items-center gap-1">
+                      <CheckCircle2 className="h-4 w-4" /> Connected
+                    </span>
+                  )}
+                  {connState === "PENDING_OUTGOING" && (
+                    <span className="text-xs font-bold text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-3 py-1.5 rounded-lg">
+                      Request Sent
+                    </span>
+                  )}
+                  {connState === "PENDING_INCOMING" && (
+                    <Button 
+                      size="sm" 
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white" 
+                      onClick={() => {
+                        const req = incomingRequests.find(r => r.sender_id === profile.id)
+                        if (req) handleRespondRequest(req.id, req.sender_id, 'accepted')
+                      }}
+                    >
+                      Accept
+                    </Button>
+                  )}
+                  {connState === "NONE" && (
+                    <Button size="sm" variant="outline" className="border-primary/50 text-primary hover:bg-primary/10" onClick={() => setSelectedProfile(profile)}>
+                      <UserPlus className="h-4 w-4 mr-1" /> Connect
+                    </Button>
+                  )}
                 </div>
-                <Button size="sm" variant="outline" className="border-primary/50 text-primary hover:bg-primary/10" onClick={() => setSelectedProfile(profile)}>
-                  <UserPlus className="h-4 w-4 mr-1" /> Connect
-                </Button>
-              </div>
-            ))}
+              )
+            })}
             {results.length === 0 && query && !searching && (
               <p className="text-sm text-gray-500 text-center py-4">No humans found.</p>
             )}

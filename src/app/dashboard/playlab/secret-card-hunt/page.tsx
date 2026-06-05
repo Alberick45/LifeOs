@@ -63,7 +63,17 @@ const COUNTRIES_PACK: CardItem[] = [
   { id: "liechtenstein", name: "Liechtenstein", emoji: "🇱🇮", rarity: "Hard", attributes: { Continent: "Europe", "First Letter": "L", Hemispheres: "Northern" }, clues: ["Doubly landlocked microstate", "Located entirely in the Alps", "Bordered by Switzerland and Austria"] },
   { id: "japan", name: "Japan", emoji: "🇯🇵", rarity: "Easy", attributes: { Continent: "Asia", "First Letter": "J", Hemispheres: "Northern" }, clues: ["Known as the Land of the Rising Sun", "Known for sushi and cherry blossoms", "Capital is Tokyo"] },
   { id: "kenya", name: "Kenya", emoji: "🇰🇪", rarity: "Easy", attributes: { Continent: "Africa", "First Letter": "K", Hemispheres: "Northern" }, clues: ["Famous for Maasai Mara safaris", "Capital is Nairobi", "Home to Mount Kenya"] },
-  { id: "madagascar", name: "Madagascar", emoji: "🇲🇬", rarity: "Medium", attributes: { Continent: "Africa", "First Letter": "M", Hemispheres: "Southern" }, clues: ["Large island nation off East Africa", "Home to baobab trees and lemurs", "Fourth largest island in the world"] }
+  { id: "madagascar", name: "Madagascar", emoji: "🇲🇬", rarity: "Medium", attributes: { Continent: "Africa", "First Letter": "M", Hemispheres: "Southern" }, clues: ["Large island nation off East Africa", "Home to baobab trees and lemurs", "Fourth largest island in the world"] },
+  { id: "canada", name: "Canada", emoji: "🇨🇦", rarity: "Easy", attributes: { Continent: "North America", "First Letter": "C", Hemispheres: "Northern" }, clues: ["Second largest country by land area", "Famous for maple syrup", "National symbol is the beaver"] },
+  { id: "egypt", name: "Egypt", emoji: "🇪🇬", rarity: "Easy", attributes: { Continent: "Africa", "First Letter": "E", Hemispheres: "Northern" }, clues: ["Home to the Great Pyramids", "The Nile river runs through it", "Located in the northeast corner of Africa"] },
+  { id: "australia", name: "Australia", emoji: "🇦🇺", rarity: "Easy", attributes: { Continent: "Oceania", "First Letter": "A", Hemispheres: "Southern" }, clues: ["Known as the Land Down Under", "Home to the Great Barrier Reef", "Famous for unique marsupials"] },
+  { id: "germany", name: "Germany", emoji: "🇩🇪", rarity: "Easy", attributes: { Continent: "Europe", "First Letter": "G", Hemispheres: "Northern" }, clues: ["Most populous nation in the European Union", "Famous for Autobahn highways", "Host of the annual Oktoberfest festival"] },
+  { id: "india", name: "India", emoji: "🇮🇳", rarity: "Easy", attributes: { Continent: "Asia", "First Letter": "I", Hemispheres: "Northern" }, clues: ["Home to the iconic Taj Mahal", "World's most populous democracy", "Known for vibrant spice markets and curry"] },
+  { id: "argentina", name: "Argentina", emoji: "🇦🇷", rarity: "Medium", attributes: { Continent: "South America", "First Letter": "A", Hemispheres: "Southern" }, clues: ["Largest Spanish-speaking nation in South America", "Famous for tango dance and beef", "Home country of soccer legend Lionel Messi"] },
+  { id: "iceland", name: "Iceland", emoji: "🇮🇸", rarity: "Hard", attributes: { Continent: "Europe", "First Letter": "I", Hemispheres: "Northern" }, clues: ["Known as the Land of Fire and Ice", "Famous for active volcanoes and hot springs", "Does not have any native mosquitoes"] },
+  { id: "new_zealand", name: "New Zealand", emoji: "🇳🇿", rarity: "Medium", attributes: { Continent: "Oceania", "First Letter": "N", Hemispheres: "Southern" }, clues: ["Where the Lord of the Rings movies were filmed", "Home of the flightless Kiwi bird", "Indigenous people are the Maori"] },
+  { id: "morocco", name: "Morocco", emoji: "🇲🇦", rarity: "Medium", attributes: { Continent: "Africa", "First Letter": "M", Hemispheres: "Northern" }, clues: ["Known for busy souks in Marrakech", "Bordered by the Atlantic Ocean and Mediterranean Sea", "Famous for tagine stews and mint tea"] },
+  { id: "thailand", name: "Thailand", emoji: "🇹🇭", rarity: "Medium", attributes: { Continent: "Asia", "First Letter": "T", Hemispheres: "Northern" }, clues: ["Known as the Land of Smiles", "Famous for ornate Buddhist temples and beaches", "Capital city is Bangkok"] }
 ]
 
 const ANIMALS_PACK: CardItem[] = [
@@ -72,7 +82,17 @@ const ANIMALS_PACK: CardItem[] = [
   { id: "platypus", name: "Platypus", emoji: "🦆", rarity: "Hard", attributes: { Type: "Mammal", Diet: "Carnivore", Habitat: "River" }, clues: ["Egg-laying mammal", "Has a duck-like bill and beaver-like tail", "Males have venomous spurs on their hind feet"] },
   { id: "kangaroo", name: "Kangaroo", emoji: "🦘", rarity: "Easy", attributes: { Type: "Mammal", Diet: "Herbivore", Habitat: "Savanna" }, clues: ["Carries offspring in a pouch", "Native to Australia", "Hops on powerful hind legs"] },
   { id: "chameleon", name: "Chameleon", emoji: "🦎", rarity: "Medium", attributes: { Type: "Reptile", Diet: "Carnivore", Habitat: "Forest" }, clues: ["Can change color to match surroundings", "Has eyes that move independently", "Catches insects with a long sticky tongue"] },
-  { id: "dolphin", name: "Dolphin", emoji: "🐬", rarity: "Easy", attributes: { Type: "Mammal", Diet: "Carnivore", Habitat: "Ocean" }, clues: ["Highly intelligent marine mammal", "Uses echolocation to hunt", "Breathes through a blowhole on top of its head"] }
+  { id: "dolphin", name: "Dolphin", emoji: "🐬", rarity: "Easy", attributes: { Type: "Mammal", Diet: "Carnivore", Habitat: "Ocean" }, clues: ["Highly intelligent marine mammal", "Uses echolocation to hunt", "Breathes through a blowhole on top of its head"] },
+  { id: "tiger", name: "Tiger", emoji: "🐯", rarity: "Easy", attributes: { Type: "Mammal", Diet: "Carnivore", Habitat: "Forest" }, clues: ["Largest wild cat species in the world", "Has distinct orange and black stripes", "Excellent swimmer unlike most other cats"] },
+  { id: "elephant", name: "Elephant", emoji: "🐘", rarity: "Easy", attributes: { Type: "Mammal", Diet: "Herbivore", Habitat: "Savanna" }, clues: ["Largest land mammal alive", "Has a long trunk used for breathing and grasping", "Known for highly developed memory and empathy"] },
+  { id: "shark", name: "Shark", emoji: "🦈", rarity: "Medium", attributes: { Type: "Fish", Diet: "Carnivore", Habitat: "Ocean" }, clues: ["Apex predator with cartilage skeleton", "Has multiple rows of replaceable teeth", "Breathes through gills on the sides of its head"] },
+  { id: "owl", name: "Owl", emoji: "🦉", rarity: "Medium", attributes: { Type: "Bird", Diet: "Carnivore", Habitat: "Forest" }, clues: ["Nocturnal bird of prey", "Can rotate its head up to 270 degrees", "Flies silently due to specialized feathers"] },
+  { id: "frog", name: "Frog", emoji: "🐸", rarity: "Easy", attributes: { Type: "Amphibian", Diet: "Carnivore", Habitat: "River" }, clues: ["Undergoes metamorphosis from tadpole", "Has moist skin and powerful jumping legs", "Known to produce loud croaking sounds"] },
+  { id: "koala", name: "Koala", emoji: "🐨", rarity: "Medium", attributes: { Type: "Mammal", Diet: "Herbivore", Habitat: "Forest" }, clues: ["Tree-dwelling marsupial", "Feeds almost exclusively on eucalyptus leaves", "Native to eastern Australia"] },
+  { id: "panda", name: "Panda", emoji: "🐼", rarity: "Easy", attributes: { Type: "Mammal", Diet: "Herbivore", Habitat: "Forest" }, clues: ["Known for distinctive black and white coat", "Diet consists 99% of bamboo stalks", "Native to mountain ranges in central China"] },
+  { id: "eagle", name: "Eagle", emoji: "🦅", rarity: "Medium", attributes: { Type: "Bird", Diet: "Carnivore", Habitat: "Forest" }, clues: ["Large bird of prey with hook bill", "Has extremely sharp long-distance eyesight", "Builds nests called eyries on high cliffs"] },
+  { id: "gorilla", name: "Gorilla", emoji: "🦍", rarity: "Hard", attributes: { Type: "Mammal", Diet: "Herbivore", Habitat: "Forest" }, clues: ["Largest living primate species", "DNA is highly similar to humans", "Lives in cohesive family groups led by silverbacks"] },
+  { id: "turtle", name: "Turtle", emoji: "🐢", rarity: "Easy", attributes: { Type: "Reptile", Diet: "Herbivore", Habitat: "Ocean" }, clues: ["Reptile protected by a bony shell", "Existed for more than 200 million years", "Lays eggs in holes dug on sandy beaches"] }
 ]
 
 const FOODS_PACK: CardItem[] = [
@@ -80,7 +100,17 @@ const FOODS_PACK: CardItem[] = [
   { id: "sushi", name: "Sushi", emoji: "🍣", rarity: "Easy", attributes: { Origin: "Asia", Category: "Savory", Course: "Main" }, clues: ["Prepared vinegared rice with raw seafood", "Wrapped in edible seaweed called Nori", "Commonly dipped in soy sauce and wasabi"] },
   { id: "kimchi", name: "Kimchi", emoji: "🥬", rarity: "Hard", attributes: { Origin: "Asia", Category: "Spicy", Course: "Side" }, clues: ["Korean fermented salted vegetables", "Typically made with napa cabbage and chili powder", "Strong sour and pungent garlic smell"] },
   { id: "gelato", name: "Gelato", emoji: "🍧", rarity: "Medium", attributes: { Origin: "Europe", Category: "Sweet", Course: "Dessert" }, clues: ["Italian style soft ice cream", "Has a lower butterfat percentage than regular ice cream", "Served slightly warmer for a silkier texture"] },
-  { id: "taco", name: "Taco", emoji: "🌮", rarity: "Easy", attributes: { Origin: "North America", Category: "Savory", Course: "Main" }, clues: ["Folded corn or flour tortilla with fillings", "Originates from Mexican street food culture", "Often served with salsa, lime, and cilantro"] }
+  { id: "taco", name: "Taco", emoji: "🌮", rarity: "Easy", attributes: { Origin: "North America", Category: "Savory", Course: "Main" }, clues: ["Folded corn or flour tortilla with fillings", "Originates from Mexican street food culture", "Often served with salsa, lime, and cilantro"] },
+  { id: "burger", name: "Burger", emoji: "🍔", rarity: "Easy", attributes: { Origin: "North America", Category: "Savory", Course: "Main" }, clues: ["Ground meat patty inside a sliced bun", "Popularized in the United States", "Commonly served with fries and pickles"] },
+  { id: "croissant", name: "Croissant", emoji: "🥐", rarity: "Medium", attributes: { Origin: "Europe", Category: "Savory", Course: "Breakfast" }, clues: ["Buttery, flaky, crescent-shaped pastry", "Originated in Austria but famous in France", "Made with laminated yeast-leavened dough"] },
+  { id: "curry", name: "Curry", emoji: "🍛", rarity: "Easy", attributes: { Origin: "Asia", Category: "Spicy", Course: "Main" }, clues: ["Dish prepared in a complex spiced sauce", "Originated in the Indian subcontinent", "Usually served over white rice or bread"] },
+  { id: "pasta", name: "Pasta", emoji: "🍝", rarity: "Easy", attributes: { Origin: "Europe", Category: "Savory", Course: "Main" }, clues: ["Staple food made from durum wheat dough", "Includes shapes like spaghetti and penne", "Usually cooked by boiling in water"] },
+  { id: "waffles", name: "Waffles", emoji: "🧇", rarity: "Easy", attributes: { Origin: "Europe", Category: "Sweet", Course: "Breakfast" }, clues: ["Leavened batter cooked between patterned plates", "Has a grid-like pattern that holds syrups", "Particularly famous in Belgium"] },
+  { id: "ramen", name: "Ramen", emoji: "🍜", rarity: "Medium", attributes: { Origin: "Asia", Category: "Savory", Course: "Main" }, clues: ["Japanese wheat noodle soup", "Served in meat or fish-based broth", "Topped with sliced pork, eggs, and nori"] },
+  { id: "salad", name: "Salad", emoji: "🥗", rarity: "Easy", attributes: { Origin: "Europe", Category: "Savory", Course: "Side" }, clues: ["Mixed cold dishes of vegetables and dressing", "Often contains lettuce, tomatoes, and cucumbers", "Served as an appetizer or side course"] },
+  { id: "falafel", name: "Falafel", emoji: "🧆", rarity: "Medium", attributes: { Origin: "Asia", Category: "Savory", Course: "Main" }, clues: ["Deep-fried ball made from ground chickpeas", "Traditional Middle Eastern street food", "Commonly served in a pita pocket with tahini"] },
+  { id: "brownie", name: "Brownie", emoji: "🍫", rarity: "Easy", attributes: { Origin: "North America", Category: "Sweet", Course: "Dessert" }, clues: ["Square, baked chocolate dessert cake", "Can be either fudgy or cakey in texture", "Often served with vanilla ice cream"] },
+  { id: "paella", name: "Paella", emoji: "🥘", rarity: "Hard", attributes: { Origin: "Europe", Category: "Savory", Course: "Main" }, clues: ["Spanish saffron-flavored rice dish", "Cooked with vegetables and seafood or meats", "Originated in the Valencia region"] }
 ]
 
 // Fallback HumanOS Friends Pack (Loaded dynamically or mocked)
@@ -147,8 +177,10 @@ export default function SecretCardHuntPage() {
   const [roomCode, setRoomCode] = useState("")
   const [roomInput, setRoomInput] = useState("")
   const [isHost, setIsHost] = useState(false)
+  const [isReady, setIsReady] = useState(false)
   const [lobbyPlayers, setLobbyPlayers] = useState<any[]>([])
   const [myPresenceId, setMyPresenceId] = useState("")
+  const myPresenceIdRef = useRef("")
   const channelRef = useRef<any>(null)
   const logContainerRef = useRef<HTMLDivElement>(null)
 
@@ -269,8 +301,12 @@ export default function SecretCardHuntPage() {
       return
     }
 
-    // Shuffle and distribute cards
-    const shuffledCards = [...activePack].sort(() => Math.random() - 0.5)
+    // Shuffle and distribute cards using Fisher-Yates algorithm
+    const shuffledCards = [...activePack]
+    for (let i = shuffledCards.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledCards[i], shuffledCards[j]] = [shuffledCards[j], shuffledCards[i]]
+    }
     
     const pCard = shuffledCards[0]
     const b1Card = shuffledCards[1]
@@ -643,6 +679,14 @@ export default function SecretCardHuntPage() {
 
   // ─── GAME STATE ADVANCEMENT ────────────────────────────────────────────────
   const advanceTurn = () => {
+    // Decrement stunnedTurns for the active player whose turn is ending
+    setPlayers(prev => prev.map((p, idx) => {
+      if (idx === currentTurnIndex && p.stunnedTurns > 0) {
+        return { ...p, stunnedTurns: p.stunnedTurns - 1 }
+      }
+      return p
+    }))
+
     const nextIndex = (currentTurnIndex + 1) % players.length
 
     if (nextIndex === 0) {
@@ -692,7 +736,9 @@ export default function SecretCardHuntPage() {
 
     const myPresId = Math.random().toString(36).substring(2, 9)
     setMyPresenceId(myPresId)
+    myPresenceIdRef.current = myPresId
     setLobbyPlayers([])
+    setIsReady(false)
 
     const channel = supabase.channel(`secret-card-hunt:${code}`, {
       config: {
@@ -715,7 +761,7 @@ export default function SecretCardHuntPage() {
         const pres = presenceState[key] as any[]
         if (pres.length > 0) {
           mapped.push({
-            presenceId: key,
+            presenceId: pres[0].presenceId || key,
             name: pres[0].name || "Anonymous Hunter",
             isHost: pres[0].isHost || false,
             isReady: pres[0].isReady || false
@@ -727,14 +773,35 @@ export default function SecretCardHuntPage() {
     })
 
     channel.on('broadcast', { event: 'start-match' }, ({ payload }) => {
-      // Set cards distribution payload and start playing
-      pushLog(`🕵️ Multi-deduction match started!`, "system")
+      const { playersList, packId } = payload
+      
+      // Select the pack
+      setSelectedPackId(packId)
+
+      // Map presence IDs to "player" for the local user
+      const mappedPlayers = playersList.map((p: any) => {
+        if (p.id === myPresenceIdRef.current) {
+          return { ...p, id: "player" }
+        }
+        return p
+      })
+
+      setPlayers(mappedPlayers)
+      setMatchTurnCount(1)
+      setCurrentTurnIndex(0)
+      setSelectedTargetId(null)
+      setSelectedQueryType(null)
+      setLogs([])
       setPhase("PLAYING")
+
+      pushLog(`🕵️ MATCH STARTED! Pack: ${packId.toUpperCase()}. Locate the opponents' cards!`, "system")
+      pushLog(`💡 Every 3 turns, global card clues will be broadcast.`, "system")
     })
 
     channel.subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
         await channel.track({
+          presenceId: myPresId,
           name: username,
           isHost: amHost,
           isReady: false
@@ -746,24 +813,83 @@ export default function SecretCardHuntPage() {
   }
 
   const toggleMultiplayerReady = () => {
-    const me = lobbyPlayers.find(p => p.presenceId === myPresenceId)
-    if (!me) return
-    const next = !me.isReady
+    const nextReady = !isReady
+    setIsReady(nextReady)
     if (channelRef.current) {
       channelRef.current.track({
+        presenceId: myPresenceIdRef.current,
         name: username,
         isHost,
-        isReady: next
+        isReady: nextReady
       })
     }
   }
 
   const startMultiplayerMatch = () => {
     if (!isHost || !channelRef.current) return
+
+    // 1. Shuffle and distribute cards using Fisher-Yates
+    const shuffledCards = [...activePack]
+    for (let i = shuffledCards.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledCards[i], shuffledCards[j]] = [shuffledCards[j], shuffledCards[i]]
+    }
+
+    const cardNames = activePack.map(c => c.name)
+
+    // Build players list from lobbyPlayers
+    const playersList = lobbyPlayers.map((lp, idx) => {
+      return {
+        id: lp.presenceId,
+        name: lp.name,
+        emoji: lp.isHost ? "👑" : "🦠",
+        isBot: false,
+        secretCard: shuffledCards[idx % shuffledCards.length],
+        status: "hidden" as const,
+        points: 0,
+        hasBluffedThisMatch: false,
+        eliminatedRound: null,
+        revealedBy: null,
+        deductionPossibilities: cardNames,
+        stunnedTurns: 0
+      }
+    })
+
+    // Pad with bots up to 4 players
+    const botNames = [
+      { name: "Albert (Bot)", emoji: "🤖" },
+      { name: "Sarah (Bot)", emoji: "👩‍🔬" },
+      { name: "Kwame (Bot)", emoji: "👨‍💻" },
+      { name: "Maya (Bot)", emoji: "🦊" }
+    ]
+
+    let cardIdx = lobbyPlayers.length
+    while (playersList.length < 4) {
+      const botInfo = botNames[playersList.length % botNames.length]
+      const botCard = shuffledCards[cardIdx % shuffledCards.length]
+      playersList.push({
+        id: `bot-${playersList.length}`,
+        name: botInfo.name,
+        emoji: botInfo.emoji,
+        isBot: true,
+        secretCard: botCard,
+        status: "hidden" as const,
+        points: 0,
+        hasBluffedThisMatch: false,
+        eliminatedRound: null,
+        revealedBy: null,
+        deductionPossibilities: cardNames.filter(name => name !== botCard.name),
+        stunnedTurns: 0
+      })
+      cardIdx++
+    }
+
     channelRef.current.send({
       type: 'broadcast',
       event: 'start-match',
       payload: {
+        playersList,
+        packId: selectedPackId,
         timestamp: Date.now()
       }
     })
@@ -957,8 +1083,9 @@ export default function SecretCardHuntPage() {
             </div>
 
             <div className="flex gap-3 pt-4 border-t border-white/5">
-              <Button onClick={toggleMultiplayerReady} className="flex-1 py-4 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold">
-                Set Ready
+              <Button onClick={toggleMultiplayerReady} 
+                className={`flex-1 py-4 text-white rounded-xl font-bold transition-all ${isReady ? "bg-emerald-600 hover:bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)]" : "bg-zinc-800 hover:bg-zinc-700"}`}>
+                {isReady ? "✓ Ready" : "Set Ready"}
               </Button>
               {isHost && (
                 <Button onClick={startMultiplayerMatch} className="flex-1 py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-extrabold">
