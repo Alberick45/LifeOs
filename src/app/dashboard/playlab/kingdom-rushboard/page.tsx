@@ -1,181 +1,186 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { ArrowLeft, Sword, Shield, Home, Users, Trophy, Play, RotateCcw, AlertTriangle, MessageSquare, Volume2, VolumeX, ShieldAlert, Check, HelpCircle, UserPlus, Lock, Flame } from "lucide-react"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { ArrowLeft, Trophy, Play, RotateCcw, AlertTriangle, Volume2, VolumeX, ShieldAlert, Check, HelpCircle, Lock, Flame, ShoppingBag, Eye, Zap, Shield, Sparkles, RefreshCw, Star, MessageSquare } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase/client"
-import { readCoins, adjustCoins, onCoinsChange, loadProgress, saveProgress } from "@/lib/playlab-coins"
+import { adjustCoins, onCoinsChange, loadProgress, saveProgress } from "@/lib/playlab-coins"
 
-// ─── TYPES ───────────────────────────────────────────────────────────────────
+// ─── TYPES & INTERFACES ──────────────────────────────────────────────────────
 type GamePhase = "SETUP" | "MULTIPLAYER_LOBBY" | "PLAYING" | "DUEL" | "RESULTS"
-type BuildingType = "houses" | "castle" | "jail" | "walls" | "market"
-type CitizenType = "workers" | "soldiers" | "scouts" | "engineers" | "merchants"
-type RoadType = "Safe" | "Risky" | "Resource" | "Portal"
+type TileType = "NEUTRAL" | "TRAP" | "SNAKE" | "TREASURE" | "QUEST" | "MARKETPLACE" | "RARE_ITEM" | "DUEL" | "EVENT" | "THRONE"
 
 interface PlayerState {
   id: string
   name: string
   emoji: string
   isBot: boolean
-  kingdom: "Auroria" | "Pyria" | "Terrania" | "Zephyria"
-  tileIndex: number // 0 (start) to 10 (Throne)
-  hp: number
-  gold: number
-  wood: number
-  stone: number
-  population: Record<CitizenType, number>
-  buildings: Record<BuildingType, number>
-  inJailBy: string | null // ID of the player whose jail they are in
-  jailTurns: number
+  tileIndex: number // 0 to 30
+  coins: number
+  inventory: string[]
+  shieldActive: boolean // immune to next trap/snake
+  snakeImmunity: boolean // snake charm
+  duelBonus: boolean // duel advantage (+2 modifier)
   color: string
+  jailTurns: number // stuns
+  activeQuest: {
+    type: "explore" | "trap" | "treasure" | "duel" | "snake"
+    progress: number
+    target: number
+    rewardCoins: number
+    rewardItem?: string
+    description: string
+  }
+}
+
+interface TileState {
+  index: number
+  type: TileType
+  revealed: boolean
+  placedTrapBy?: string // player ID who placed a trap here
 }
 
 interface DuelState {
   active: boolean
   challengerId: string
   defenderId: string
-  challengerPos: number // 0 to 5
-  defenderPos: number // 5 to 0
-  laneTiles: { type: "Trap" | "Reward" | "Special" | "Neutral"; resolved: boolean; description: string }[]
-  turnId: string // whose turn in duel
+  challengerRoll: number | null
+  defenderRoll: number | null
   logs: string[]
-  winnerId: string | null
 }
 
 interface ChatLog {
   id: string
   sender: string
   message: string
-  type: "system" | "hype" | "roast" | "emote"
+  type: "system" | "commentator" | "rare" | "danger"
 }
 
-// ─── CONSTANTS & CONFIGS ─────────────────────────────────────────────────────
-const KINGDOM_CONFIGS = {
-  Auroria: { name: "Auroria", emoji: "🏰☀️", color: "text-yellow-400 border-yellow-500/30 bg-yellow-950/10 hover:bg-yellow-950/20", theme: "yellow" },
-  Pyria: { name: "Pyria", emoji: "🏰🔥", color: "text-red-400 border-red-500/30 bg-red-950/10 hover:bg-red-950/20", theme: "red" },
-  Terrania: { name: "Terrania", emoji: "🏰🌿", color: "text-emerald-400 border-emerald-500/30 bg-emerald-950/10 hover:bg-emerald-950/20", theme: "emerald" },
-  Zephyria: { name: "Zephyria", emoji: "🏰🌀", color: "text-blue-400 border-blue-500/30 bg-blue-950/10 hover:bg-blue-950/20", theme: "blue" }
-}
+// ─── CONSTANTS ───────────────────────────────────────────────────────────────
+const EMOJIS = ["🦁", "🦅", "🐊", "🐉", "🐺", "🦊", "🦄", "🐙"]
+const COLORS = ["#ef4444", "#3b82f6", "#10b981", "#eab308", "#a855f7", "#ec4899"]
 
-const COMMENTARY_QUOTES = {
+const QUEST_TEMPLATES = [
+  { type: "explore" as const, target: 4, rewardCoins: 40, rewardItem: "Foresight Eye", description: "Explore 4 hidden tiles" },
+  { type: "trap" as const, target: 1, rewardCoins: 50, rewardItem: "Immunity Shield", description: "Trigger/Survive 1 Trap" },
+  { type: "treasure" as const, target: 2, rewardCoins: 30, rewardItem: "Warp Scroll", description: "Collect 2 Treasure caches" },
+  { type: "duel" as const, target: 1, rewardCoins: 60, rewardItem: "Duel Crest", description: "Engage in 1 Duel" },
+  { type: "snake" as const, target: 1, rewardCoins: 40, rewardItem: "Snake Charm", description: "Encounter 1 Snake setback" }
+]
+
+const COMMENTATOR_LINES = {
   trap: [
-    "Ouch! That was a brutal placement!",
-    "HE WALKED STRAIGHT INTO A DEATH TILE!",
-    "Greed over safety... a classic blunder!",
-    "Pitfall activated! Watch your step, explorer!",
-    "Trap triggered! The announcers are cringing!"
+    "Boom! A hidden trap snaps shut!",
+    "Direct hit! That explorer walked right into a pitfall!",
+    "Oh, the agony! A trap has been triggered!",
+    "Trap activated! Announcers are holding their breath!"
   ],
-  reward: [
-    "Jackpot! An alchemical chest found!",
-    "Wealth flows into their village coffers!",
-    "Resource gain! A massive economic boost!",
-    "Loot gathered. Strategy meets luck!"
+  snake: [
+    "Watch out! The snake strikes again!",
+    "Sliding backward! The snake coils around their plans!",
+    "Oh no! Slipped all the way back down a snake's tail!",
+    "The snake claims another victim!"
   ],
-  duel_start: [
-    "A formal challenge has been issued!",
-    "They are facing off in the Roulette Lane!",
-    "Let the tactical duel begin!",
-    "No escape now! Two kingdoms collide!"
-  ],
-  jail: [
-    "Locked away! Throw away the key!",
-    "Sent straight to the village prison!",
-    "A hostage situation in kingdom territory!",
-    "Imprisoned! Time to pay a heavy bribe!"
-  ],
-  throne_near: [
-    "They are closing in on the Throne Zone!",
-    "So close they can taste the crown!",
-    "The Throne is in sight! Tension is sky high!"
+  duel: [
+    "Conflict arises! Two explorers collide!",
+    "Let the battle commence! A duel has begun!",
+    "Roll for glory! They stand face to face!",
+    "A legendary duel is taking place!"
   ],
   win: [
-    "VICTORY! The new Sovereign has ascended!",
-    "Unbelievable! A legendary triumph!",
-    "Kingdom Rushboard has a new supreme champion!"
+    "VICTORY! The Sovereign crown is claimed!",
+    "Ascension complete! We have our champion!",
+    "Unbelievable race! The Throne has been seized!"
   ]
 }
 
+// Helper to layout winding path index to x, y coords in a 6-col grid
+const getTileCoords = (index: number) => {
+  const cols = 6
+  const row = Math.floor(index / cols)
+  const col = index % cols
+  const isReversed = row % 2 === 1
+  const x = isReversed ? (cols - 1 - col) : col
+  const y = row
+  return { x, y }
+}
+
 export default function KingdomRushboardPage() {
-  // Session / General States
+  // Session & Global States
   const [userId, setUserId] = useState<string | null>(null)
-  const [coins, setCoins] = useState(100)
-  const [username, setUsername] = useState("Commander")
+  const [globalCoins, setGlobalCoins] = useState(100)
+  const [username, setUsername] = useState("Player")
   const [phase, setPhase] = useState<GamePhase>("SETUP")
   const [soundMuted, setSoundMuted] = useState(false)
-  const [isLobbyHost, setIsLobbyHost] = useState(false)
+  
+  // Lobby States
   const [roomCode, setRoomCode] = useState("")
   const [roomCodeInput, setRoomCodeInput] = useState("")
+  const [isLobbyHost, setIsLobbyHost] = useState(false)
   const [lobbyPlayers, setLobbyPlayers] = useState<any[]>([])
   const [myPresenceId, setMyPresenceId] = useState("")
-  const myPresenceIdRef = useRef("")
-  const channelRef = useRef<any>(null)
-
-  // Game Core States
-  const [players, setPlayers] = useState<PlayerState[]>([])
-  const [currentPlayerIdx, setCurrentPlayerIdx] = useState(0)
-  const [diceRoll, setDiceRoll] = useState<number | null>(null)
-  const [selectedSteps, setSelectedSteps] = useState<number>(1)
-  const [selectedRoad, setSelectedRoad] = useState<RoadType>("Safe")
-  const [logs, setLogs] = useState<ChatLog[]>([])
-  const [shakeScreen, setShakeScreen] = useState(false)
   const [isReady, setIsReady] = useState(false)
 
-  // Duel State
+  // Game Engine States
+  const [board, setBoard] = useState<TileState[]>([])
+  const [players, setPlayers] = useState<PlayerState[]>([])
+  const [currentPlayerIdx, setCurrentPlayerIdx] = useState(0)
+  const [logs, setLogs] = useState<ChatLog[]>([])
+  const [shakeScreen, setShakeScreen] = useState(false)
+  const [placingTrap, setPlacingTrap] = useState(false)
+  const [shoppingPlayerId, setShoppingPlayerId] = useState<string | null>(null)
+
+  // Dice roll states
+  const [isRolling, setIsRolling] = useState(false)
+  const [diceRoll, setDiceRoll] = useState<number | null>(null)
+  const [diceDisplayValue, setDiceDisplayValue] = useState(1)
+
+  // Duel states
   const [duel, setDuel] = useState<DuelState>({
     active: false,
     challengerId: "",
     defenderId: "",
-    challengerPos: 0,
-    defenderPos: 5,
-    laneTiles: [],
-    turnId: "",
-    logs: [],
-    winnerId: null
+    challengerRoll: null,
+    defenderRoll: null,
+    logs: []
   })
 
-  // Alert State
-  const [alertMsg, setAlertMsg] = useState<{ text: string; success: boolean } | null>(null)
-  const chatEndRef = useRef<HTMLDivElement>(null)
+  // Refs
+  const myPresenceIdRef = useRef("")
+  const channelRef = useRef<any>(null)
+  const logsEndRef = useRef<HTMLDivElement>(null)
 
-  const triggerAlert = (text: string, success: boolean = true) => {
-    setAlertMsg({ text, success })
-    setTimeout(() => setAlertMsg(null), 3000)
-  }
-
-  // Voice Comm Engine using Synthesis
-  const speak = (text: string) => {
+  // ─── AUDIO COMMENTATOR Synthesis ──────────────────────────────────────────
+  const speak = useCallback((text: string) => {
     if (soundMuted || typeof window === "undefined" || !window.speechSynthesis) return
-    window.speechSynthesis.cancel() // Stop any previous speech
+    window.speechSynthesis.cancel()
     const utterance = new SpeechSynthesisUtterance(text)
     utterance.rate = 1.05
     utterance.pitch = 0.95
     window.speechSynthesis.speak(utterance)
-  }
+  }, [soundMuted])
 
-  const pushLog = (message: string, type: ChatLog["type"] = "system") => {
+  const pushLog = useCallback((message: string, type: ChatLog["type"] = "system") => {
     const newLog: ChatLog = {
       id: `${Date.now()}-${Math.random()}`,
-      sender: type === "system" ? "📢 Announcer" : type === "hype" ? "🔥 Hype Bot" : type === "roast" ? "💀 Roast Bot" : "👑 Player",
+      sender: type === "system" ? "📢 Announcer" : type === "commentator" ? "🎙️ Commentator" : type === "rare" ? "💎 Rare Drop" : "🧨 Hazard",
       message,
       type
     }
     setLogs(prev => [...prev, newLog])
-
-    // Speech trigger for major pings
-    if (type === "hype" || type === "roast" || type === "system") {
+    if (type === "commentator" || type === "danger" || type === "rare") {
       speak(message)
     }
-  }
+  }, [speak])
 
-  // Auto scroll logs
   useEffect(() => {
-    if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: "smooth" })
+    if (logsEndRef.current) {
+      logsEndRef.current.scrollIntoView({ behavior: "smooth" })
     }
   }, [logs])
 
-  // Database / Session load
+  // ─── INIT PROFILE & COINS ──────────────────────────────────────────────────
   useEffect(() => {
     let resolvedUserId: string | null = null
     let unsubCoins: (() => void) | null = null
@@ -193,8 +198,8 @@ export default function KingdomRushboardPage() {
       }
 
       const progress = await loadProgress(resolvedUserId)
-      setCoins(progress.coins)
-      unsubCoins = onCoinsChange(resolvedUserId, (newBal) => setCoins(newBal))
+      setGlobalCoins(progress.coins)
+      unsubCoins = onCoinsChange(resolvedUserId, (newBal) => setGlobalCoins(newBal))
     }
     init()
 
@@ -204,7 +209,67 @@ export default function KingdomRushboardPage() {
     }
   }, [])
 
-  // ─── LOBBY SETUP & BOT FILL ─────────────────────────────────────────────────
+  // ─── BOARD GENERATION ──────────────────────────────────────────────────────
+  const generateBoard = (): TileState[] => {
+    return Array.from({ length: 31 }).map((_, idx) => {
+      if (idx === 0) return { index: idx, type: "NEUTRAL", revealed: true }
+      if (idx === 30) return { index: idx, type: "THRONE", revealed: true }
+      
+      let type: TileType = "NEUTRAL"
+      if (idx === 5 || idx === 15 || idx === 25) type = "MARKETPLACE"
+      else if (idx === 8 || idx === 18 || idx === 28) type = "SNAKE"
+      else if (idx === 4 || idx === 12 || idx === 22) type = "TRAP"
+      else if (idx === 3 || idx === 11 || idx === 21) type = "TREASURE"
+      else if (idx === 7 || idx === 16 || idx === 24) type = "DUEL"
+      else if (idx === 9 || idx === 17 || idx === 26) type = "QUEST"
+      else if (idx === 14 || idx === 27) type = "RARE_ITEM"
+      else if (idx === 10 || idx === 20 || idx === 29) type = "EVENT"
+      
+      return { index: idx, type, revealed: false }
+    })
+  }
+
+  // ─── QUEST TEMPLATES ───────────────────────────────────────────────────────
+  const generateQuest = () => {
+    const template = QUEST_TEMPLATES[Math.floor(Math.random() * QUEST_TEMPLATES.length)]
+    return {
+      ...template,
+      progress: 0
+    }
+  }
+
+  // ─── SYNC STATE ACROSS MULTIPLAYER ─────────────────────────────────────────
+  const syncGameState = (
+    updatedPlayers: PlayerState[],
+    nextPlayerIdx: number,
+    newLogs: any[] = [],
+    updatedBoard: TileState[] = board,
+    extraPayload = {}
+  ) => {
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'game-event',
+        payload: {
+          players: updatedPlayers,
+          currentPlayerIdx: nextPlayerIdx,
+          logs: newLogs,
+          board: updatedBoard,
+          ...extraPayload
+        }
+      })
+    } else {
+      setPlayers(updatedPlayers)
+      setCurrentPlayerIdx(nextPlayerIdx)
+      setBoard(updatedBoard)
+      newLogs.forEach(l => {
+        setLogs(prev => [...prev, { id: `${Date.now()}-${Math.random()}`, sender: l.sender, message: l.message, type: l.type }])
+        speak(l.message)
+      })
+    }
+  }
+
+  // ─── MULTIPLAYER LOBBY HANDLERS ────────────────────────────────────────────
   const hostLobby = () => {
     const code = Math.random().toString(36).substring(2, 6).toUpperCase()
     setRoomCode(code)
@@ -219,7 +284,7 @@ export default function KingdomRushboardPage() {
       setIsLobbyHost(false)
       joinMultiplayerLobby(code, false)
     } else {
-      triggerAlert("Invalid Room Code!", false)
+      alert("Invalid Room Code!")
     }
   }
 
@@ -262,9 +327,8 @@ export default function KingdomRushboardPage() {
     })
 
     channel.on('broadcast', { event: 'start-match' }, ({ payload }) => {
-      const { playersList } = payload
+      const { playersList, boardInit } = payload
       
-      // Map local user ID to 'player'
       const mapped = playersList.map((p: any) => {
         if (p.id === myPresenceIdRef.current) {
           return { ...p, id: "player" }
@@ -273,21 +337,22 @@ export default function KingdomRushboardPage() {
       })
 
       setPlayers(mapped)
+      setBoard(boardInit)
       setPhase("PLAYING")
       setCurrentPlayerIdx(0)
       setLogs([])
       pushLog("🏰 Welcome to Kingdom Rushboard Arena! Race to the Throne has begun!", "system")
-      pushLog("🎙️ ANN-1 Commentator Engine Activated. Speech synthesizers loaded.", "hype")
+      pushLog("🎙️ ANN-1 Commentator Engine Loaded. Visual board online.", "commentator")
     })
 
     channel.on('broadcast', { event: 'game-event' }, ({ payload }) => {
-      // Sync gameplay steps triggered by remote players
       if (payload.players) setPlayers(payload.players)
       if (payload.currentPlayerIdx !== undefined) setCurrentPlayerIdx(payload.currentPlayerIdx)
+      if (payload.board) setBoard(payload.board)
       if (payload.logs) {
         payload.logs.forEach((l: any) => {
           setLogs(prev => [...prev, { id: `${Date.now()}-${Math.random()}`, sender: l.sender, message: l.message, type: l.type }])
-          if (l.type === "hype" || l.type === "roast" || l.type === "system") speak(l.message)
+          speak(l.message)
         })
       }
       if (payload.duel) setDuel(payload.duel)
@@ -324,607 +389,785 @@ export default function KingdomRushboardPage() {
   const startMatch = () => {
     if (!isLobbyHost || !channelRef.current) return
 
-    const initialKingdoms: ("Auroria" | "Pyria" | "Terrania" | "Zephyria")[] = ["Auroria", "Pyria", "Terrania", "Zephyria"]
-    const colors = ["#facc15", "#f87171", "#34d399", "#60a5fa"]
-
-    // Build human players
+    const initialBoard = generateBoard()
     const playersList: PlayerState[] = lobbyPlayers.map((lp, idx) => ({
       id: lp.presenceId,
       name: lp.name,
-      emoji: "🦠",
+      emoji: EMOJIS[idx % EMOJIS.length],
       isBot: false,
-      kingdom: initialKingdoms[idx % 4],
       tileIndex: 0,
-      hp: 100,
-      gold: 150,
-      wood: 80,
-      stone: 50,
-      population: { workers: 5, soldiers: 2, scouts: 1, engineers: 0, merchants: 0 },
-      buildings: { houses: 1, castle: 1, jail: 0, walls: 0, market: 0 },
-      inJailBy: null,
+      coins: 100,
+      inventory: ["Trap Shield"], // Start with a basic shield
+      shieldActive: false,
+      snakeImmunity: false,
+      duelBonus: false,
+      color: COLORS[idx % COLORS.length],
       jailTurns: 0,
-      color: colors[idx % 4]
+      activeQuest: generateQuest()
     }))
 
-    // Fill remaining spots with bots up to 4 players
-    const botNames = [
-      { name: "Sovereign AI (Bot)", emoji: "🤖" },
-      { name: "Sir Lancelot (Bot)", emoji: "🛡️" },
-      { name: "Lady Gwendolyn (Bot)", emoji: "🔮" },
-      { name: "King Midas (Bot)", emoji: "🪙" }
-    ]
-
-    let kingdomIdx = lobbyPlayers.length
+    // Fill with bots up to 4 players
+    const botNames = ["Sir Alistair (Bot)", "Lady Vanessa (Bot)", "King Richard (Bot)", "Dwarf Grom (Bot)"]
     while (playersList.length < 4) {
-      const bot = botNames[playersList.length % botNames.length]
+      const bIdx = playersList.length
       playersList.push({
-        id: `bot-${playersList.length}`,
-        name: bot.name,
-        emoji: bot.emoji,
+        id: `bot-${bIdx}`,
+        name: botNames[bIdx % botNames.length],
+        emoji: EMOJIS[bIdx % EMOJIS.length],
         isBot: true,
-        kingdom: initialKingdoms[kingdomIdx % 4],
         tileIndex: 0,
-        hp: 100,
-        gold: 100,
-        wood: 50,
-        stone: 30,
-        population: { workers: 3, soldiers: 1, scouts: 0, engineers: 1, merchants: 0 },
-        buildings: { houses: 1, castle: 1, jail: 0, walls: 0, market: 0 },
-        inJailBy: null,
+        coins: 100,
+        inventory: ["Trap Shield"],
+        shieldActive: false,
+        snakeImmunity: false,
+        duelBonus: false,
+        color: COLORS[bIdx % COLORS.length],
         jailTurns: 0,
-        color: colors[playersList.length % 4]
+        activeQuest: generateQuest()
       })
-      kingdomIdx++
     }
 
     channelRef.current.send({
       type: 'broadcast',
       event: 'start-match',
-      payload: { playersList }
+      payload: { playersList, boardInit: initialBoard }
     })
   }
 
-  // ─── ACTION LOGIC ──────────────────────────────────────────────────────────
-  const syncGameState = (updatedPlayers: PlayerState[], nextPlayerIdx: number, newLogs: any[] = [], extraPayload = {}) => {
-    if (channelRef.current) {
-      channelRef.current.send({
-        type: 'broadcast',
-        event: 'game-event',
-        payload: {
-          players: updatedPlayers,
-          currentPlayerIdx: nextPlayerIdx,
-          logs: newLogs,
-          ...extraPayload
-        }
-      })
-    } else {
-      // Local fallback (Single Match mode simulated)
-      setPlayers(updatedPlayers)
-      setCurrentPlayerIdx(nextPlayerIdx)
-      newLogs.forEach(l => {
-        setLogs(prev => [...prev, { id: `${Date.now()}-${Math.random()}`, sender: l.sender, message: l.message, type: l.type }])
-        if (l.type === "hype" || l.type === "roast" || l.type === "system") speak(l.message)
-      })
-    }
-  }
-
-  const rollDice = () => {
-    if (diceRoll !== null) return
-    const roll = Math.floor(Math.random() * 6) + 1
-    setDiceRoll(roll)
-    setSelectedSteps(roll)
-    speak(`You rolled a ${roll}!`)
-  }
-
-  const advancePlayerTurn = () => {
+  // ─── PLAYING TURNS & BOT TURNS ─────────────────────────────────────────────
+  const advanceTurn = (currentList: PlayerState[]) => {
     setDiceRoll(null)
-    const nextIdx = (currentPlayerIdx + 1) % players.length
-    
-    // Resource Economy Tick for the next player
-    const nextPlayer = players[nextIdx]
-    const updated = players.map((p, idx) => {
-      if (idx === nextIdx) {
-        // Gold / Wood / Stone generated from market, population, buildings
-        const goldGen = 10 + p.population.workers * 2 + p.buildings.market * 15
-        const woodGen = 5 + p.buildings.houses * 3
-        const stoneGen = 2 + p.buildings.castle * 2
-        return {
-          ...p,
-          gold: p.gold + goldGen,
-          wood: p.wood + woodGen,
-          stone: p.stone + stoneGen
+    const nextIdx = (currentPlayerIdx + 1) % currentList.length
+    const nextPlayer = currentList[nextIdx]
+
+    if (nextPlayer.jailTurns > 0) {
+      const updated = currentList.map((p, idx) => {
+        if (idx === nextIdx) {
+          return { ...p, jailTurns: p.jailTurns - 1 }
         }
-      }
-      return p
-    })
-
-    // If bot, execute simulated bot decision
-    if (updated[nextIdx]?.isBot) {
-      setTimeout(() => {
-        executeBotTurn(nextIdx, updated)
-      }, 1500)
-    } else {
-      syncGameState(updated, nextIdx)
-    }
-  }
-
-  // Choose steps and advance on road
-  const executeMove = () => {
-    if (diceRoll === null) return
-    const activePlayer = players[currentPlayerIdx]
-    if (activePlayer.inJailBy) {
-      triggerAlert("You are in jail! Escape first.", false)
-      return
-    }
-
-    const nextTileIndex = Math.min(10, activePlayer.tileIndex + selectedSteps)
-    const isThrone = nextTileIndex === 10
-
-    let hpDiff = 0
-    let goldDiff = 0
-    let woodDiff = 0
-    let stoneDiff = 0
-    let newPrisonerStatus = false
-    let tileEventMsg = ""
-    let commentaryType: ChatLog["type"] = "system"
-
-    // Road event resolution
-    if (selectedRoad === "Safe") {
-      goldDiff = 10
-      tileEventMsg = `${activePlayer.name} travelled the Safe Road and gathered 10 Gold.`
-    } else if (selectedRoad === "Risky") {
-      const roll = Math.random()
-      if (roll < 0.45) {
-        hpDiff = -30
-        setShakeScreen(true)
-        setTimeout(() => setShakeScreen(false), 500)
-        tileEventMsg = `${activePlayer.name} triggered a Pitfall trap! Lost 30 HP.`
-        commentaryType = "roast"
-      } else {
-        goldDiff = 40
-        woodDiff = 20
-        tileEventMsg = `${activePlayer.name} bypassed the risks and retrieved a Golden Cache (+40 Gold, +20 Wood).`
-        commentaryType = "hype"
-      }
-    } else if (selectedRoad === "Resource") {
-      woodDiff = 15
-      stoneDiff = 15
-      tileEventMsg = `${activePlayer.name} navigated the Quarry Paths, collecting 15 Wood and 15 Stone.`
-    } else if (selectedRoad === "Portal") {
-      const portalRoll = Math.random()
-      if (portalRoll < 0.3) {
-        newPrisonerStatus = true
-        tileEventMsg = `${activePlayer.name} was caught in a Void Trap and locked in prison!`
-        commentaryType = "roast"
-      } else {
-        goldDiff = 50
-        tileEventMsg = `${activePlayer.name} teleported safely, finding ancient relics (+50 Gold).`
-        commentaryType = "hype"
-      }
-    }
-
-    const updated = players.map((p, idx) => {
-      if (idx === currentPlayerIdx) {
-        const nextHp = Math.max(0, p.hp + hpDiff)
-        const inJail = newPrisonerStatus ? "bot-1" : p.inJailBy // default jailer
-        return {
-          ...p,
-          tileIndex: nextTileIndex,
-          hp: nextHp,
-          gold: Math.max(0, p.gold + goldDiff),
-          wood: Math.max(0, p.wood + woodDiff),
-          stone: Math.max(0, p.stone + stoneDiff),
-          inJailBy: inJail,
-          jailTurns: newPrisonerStatus ? 2 : p.jailTurns
-        }
-      }
-      return p
-    })
-
-    const newLogsList = [
-      { sender: "📢 Announcer", message: tileEventMsg, type: commentaryType }
-    ]
-
-    // Check Sovereign Victory
-    if (isThrone) {
-      newLogsList.push({
-        sender: "📢 Announcer",
-        message: `👑 Sovereign Ascension! ${activePlayer.name} reached the central Throne Zone!`,
-        type: "hype"
+        return p
       })
-      syncGameState(updated, currentPlayerIdx, newLogsList, { phase: "RESULTS" })
-      setPhase("RESULTS")
-      
-      // Sync coins award
-      if (activePlayer.id === "player") {
-        adjustCoins(userId, 30) // +30 coins
-      }
+      pushLog(`⏳ ${nextPlayer.name} is stunned/skipping turn! (${nextPlayer.jailTurns} turns remaining)`, "danger")
+      syncGameState(updated, nextIdx)
+      setTimeout(() => advanceTurn(updated), 1500)
       return
     }
 
-    syncGameState(updated, currentPlayerIdx, newLogsList)
-    advancePlayerTurn()
-  }
-
-  // Village Upgrades
-  const buildStructure = (type: BuildingType) => {
-    const activePlayer = players[currentPlayerIdx]
-    let goldCost = 30
-    let woodCost = 20
-    let stoneCost = 10
-
-    if (type === "castle") { goldCost = 80; woodCost = 50; stoneCost = 40 }
-    if (type === "jail") { goldCost = 40; woodCost = 20; stoneCost = 30 }
-    if (type === "market") { goldCost = 50; woodCost = 30; stoneCost = 10 }
-    if (type === "walls") { goldCost = 40; woodCost = 10; stoneCost = 40 }
-
-    if (activePlayer.gold < goldCost || activePlayer.wood < woodCost || activePlayer.stone < stoneCost) {
-      triggerAlert("Insufficient materials!", false)
-      return
-    }
-
-    const updated = players.map((p, idx) => {
-      if (idx === currentPlayerIdx) {
-        return {
-          ...p,
-          gold: p.gold - goldCost,
-          wood: p.wood - woodCost,
-          stone: p.stone - stoneCost,
-          buildings: {
-            ...p.buildings,
-            [type]: p.buildings[type] + 1
-          }
-        }
-      }
-      return p
-    })
-
-    const upgradeMsg = `${activePlayer.name} upgraded their ${type.toUpperCase()} in the village.`
-    syncGameState(updated, currentPlayerIdx, [{ sender: "📢 Announcer", message: upgradeMsg, type: "system" }])
-  }
-
-  // Jail Escape Trials
-  const executeJailAction = (actionType: "Bribe" | "Dice") => {
-    const activePlayer = players[currentPlayerIdx]
-    if (!activePlayer.inJailBy) return
-
-    let escaped = false
-    let goldCost = 0
-    let msg = ""
-
-    if (actionType === "Bribe") {
-      goldCost = 50
-      if (activePlayer.gold < goldCost) {
-        triggerAlert("Not enough Gold for bribe!", false)
-        return
-      }
-      escaped = true
-      msg = `${activePlayer.name} bribed the guards with 50 Gold and escaped jail!`
+    if (nextPlayer.isBot) {
+      syncGameState(currentList, nextIdx)
+      setTimeout(() => executeBotTurn(nextIdx, currentList), 2000)
     } else {
-      const roll = Math.floor(Math.random() * 6) + 1
-      if (roll >= 5) {
-        escaped = true
-        msg = `${activePlayer.name} rolled a ${roll} in the Dice Trial and escaped!`
-      } else {
-        msg = `${activePlayer.name} rolled a ${roll} and failed the Dice Trial, staying locked in jail.`
-      }
+      syncGameState(currentList, nextIdx)
     }
-
-    const updated = players.map((p, idx) => {
-      if (idx === currentPlayerIdx) {
-        return {
-          ...p,
-          gold: Math.max(0, p.gold - goldCost),
-          inJailBy: escaped ? null : p.inJailBy,
-          jailTurns: escaped ? 0 : p.jailTurns - 1
-        }
-      }
-      return p
-    })
-
-    syncGameState(updated, currentPlayerIdx, [{ sender: "📢 Announcer", message: msg, type: escaped ? "hype" : "roast" }])
-    
-    // Spend turn
-    advancePlayerTurn()
   }
 
-  // ─── BOT PLAYGROUND DECISIONS ──────────────────────────────────────────────
-  const executeBotTurn = (botIdx: number, currentPlayersList: PlayerState[]) => {
-    const bot = currentPlayersList[botIdx]
-    if (!bot) return
+  // ─── DICE ROLLING ANIMATION ────────────────────────────────────────────────
+  const rollDice = () => {
+    if (isRolling || diceRoll !== null) return
+    setIsRolling(true)
+    let rollResult = Math.floor(Math.random() * 6) + 1
 
-    let updated = [...currentPlayersList]
+    const interval = setInterval(() => {
+      setDiceDisplayValue(Math.floor(Math.random() * 6) + 1)
+    }, 60)
+
+    setTimeout(() => {
+      clearInterval(interval)
+      setDiceDisplayValue(rollResult)
+      setDiceRoll(rollResult)
+      setIsRolling(false)
+      pushLog(`🎲 ${players[currentPlayerIdx]?.name} rolled a ${rollResult}! Choose a tile to move to.`, "system")
+    }, 1200)
+  }
+
+  // ─── HAZARD RESOLUTIONS (TRAP, SNAKE, DUELS, TREASURE) ──────────────────────
+  const resolveTileTrigger = (
+    playerIdx: number,
+    targetTileIndex: number,
+    currentList: PlayerState[],
+    currentBoard: TileState[]
+  ) => {
+    const player = currentList[playerIdx]
+    const tile = currentBoard[targetTileIndex]
+    let updatedPlayers = [...currentList]
+    let updatedBoard = [...currentBoard]
     let logMsg = ""
-    let commentaryType: ChatLog["type"] = "system"
+    let logsType: ChatLog["type"] = "system"
 
-    if (bot.inJailBy) {
-      // Jail escape logic
-      if (bot.gold >= 50) {
-        updated = updated.map((p, idx) => {
-          if (idx === botIdx) {
-            return { ...p, gold: p.gold - 50, inJailBy: null, jailTurns: 0 }
-          }
-          return p
-        })
-        logMsg = `🤖 ${bot.name} paid a bribe of 50 Gold and escaped jail.`
-      } else {
-        const roll = Math.floor(Math.random() * 6) + 1
-        const success = roll >= 5
-        updated = updated.map((p, idx) => {
-          if (idx === botIdx) {
+    // Mark tile as permanently revealed
+    updatedBoard[targetTileIndex] = { ...tile, revealed: true }
+
+    // Quest progression for exploration
+    if (player.activeQuest.type === "explore") {
+      const wasRevealed = tile.revealed
+      if (!wasRevealed) {
+        updatedPlayers = updatedPlayers.map((p, idx) => {
+          if (idx === playerIdx) {
+            const nextProgress = p.activeQuest.progress + 1
             return {
               ...p,
-              inJailBy: success ? null : p.inJailBy,
-              jailTurns: success ? 0 : p.jailTurns - 1
+              activeQuest: { ...p.activeQuest, progress: nextProgress }
             }
           }
           return p
         })
-        logMsg = `🎲 ${bot.name} rolled a ${roll} during trial. ${success ? "Escaped!" : "Failed."}`
-        commentaryType = success ? "hype" : "roast"
       }
-    } else {
-      // Movement choice
-      const randomSteps = Math.floor(Math.random() * 4) + 1
-      const roads: RoadType[] = ["Safe", "Risky", "Resource", "Portal"]
-      const chosenRoad = roads[Math.floor(Math.random() * roads.length)]
-      const nextTile = Math.min(10, bot.tileIndex + randomSteps)
+    }
 
-      let hpChange = 0
-      let goldChange = 0
+    // Resolve specific tile contents
+    switch (tile.type) {
+      case "TREASURE":
+        const goldGain = Math.floor(Math.random() * 30) + 30
+        updatedPlayers = updatedPlayers.map((p, idx) => {
+          if (idx === playerIdx) {
+            let nextCoins = p.coins + goldGain
+            let qProgress = p.activeQuest.progress
+            if (p.activeQuest.type === "treasure") {
+              qProgress = Math.min(p.activeQuest.target, qProgress + 1)
+            }
+            return { ...p, coins: nextCoins, activeQuest: { ...p.activeQuest, progress: qProgress } }
+          }
+          return p
+        })
+        logMsg = `💰 Treasure! ${player.name} retrieved an ancient vault (+${goldGain} Coins).`
+        break
 
-      if (chosenRoad === "Risky" && Math.random() < 0.5) {
-        hpChange = -20
-        logMsg = `🤖 ${bot.name} rolled and moved ${randomSteps} tiles along the Risky Road. Hit a trap (-20 HP).`
-        commentaryType = "roast"
+      case "TRAP":
+        // Check shield protection
+        if (player.shieldActive) {
+          updatedPlayers = updatedPlayers.map((p, idx) => {
+            if (idx === playerIdx) {
+              return { ...p, shieldActive: false }
+            }
+            return p
+          })
+          logMsg = `🛡️ Trap Shield absorbed the dangerous blast for ${player.name}!`
+        } else {
+          // Trigger actual trap
+          const lines = COMMENTATOR_LINES.trap
+          const quote = lines[Math.floor(Math.random() * lines.length)]
+          
+          // Trap outcome: lost turn or move back 2 spaces
+          const trapOutcome = Math.random() < 0.5 ? "back" : "stun"
+          if (trapOutcome === "back") {
+            const backIndex = Math.max(0, targetTileIndex - 2)
+            updatedPlayers = updatedPlayers.map((p, idx) => {
+              if (idx === playerIdx) {
+                return { ...p, tileIndex: backIndex }
+              }
+              return p
+            })
+            logMsg = `🧨 ${quote} ${player.name} was blasted backward to tile ${backIndex}.`
+          } else {
+            updatedPlayers = updatedPlayers.map((p, idx) => {
+              if (idx === playerIdx) {
+                return { ...p, jailTurns: 1 }
+              }
+              return p
+            })
+            logMsg = `🧨 ${quote} ${player.name} was stunned and loses their next turn!`
+          }
+          logsType = "danger"
+
+          // Update Quest progress for trap survived
+          updatedPlayers = updatedPlayers.map((p, idx) => {
+            if (idx === playerIdx && p.activeQuest.type === "trap") {
+              return { ...p, activeQuest: { ...p.activeQuest, progress: Math.min(p.activeQuest.target, p.activeQuest.progress + 1) } }
+            }
+            return p
+          })
+        }
+        setShakeScreen(true)
+        setTimeout(() => setShakeScreen(false), 500)
+        break
+
+      case "SNAKE":
+        if (player.snakeImmunity || player.shieldActive) {
+          updatedPlayers = updatedPlayers.map((p, idx) => {
+            if (idx === playerIdx) {
+              return { ...p, shieldActive: false, snakeImmunity: false }
+            }
+            return p
+          })
+          logMsg = `🛡️ ${player.name} bypassed the giant viper thanks to their protective items!`
+        } else {
+          const lines = COMMENTATOR_LINES.snake
+          const quote = lines[Math.floor(Math.random() * lines.length)]
+          const targetIndex = Math.max(0, targetTileIndex - 5)
+          updatedPlayers = updatedPlayers.map((p, idx) => {
+            if (idx === playerIdx) {
+              return { ...p, tileIndex: targetIndex }
+            }
+            return p
+          })
+          logMsg = `🐍 ${quote} ${player.name} slid all the way back to tile ${targetIndex}.`
+          logsType = "danger"
+
+          // Update Quest progress
+          updatedPlayers = updatedPlayers.map((p, idx) => {
+            if (idx === playerIdx && p.activeQuest.type === "snake") {
+              return { ...p, activeQuest: { ...p.activeQuest, progress: Math.min(p.activeQuest.target, p.activeQuest.progress + 1) } }
+            }
+            return p
+          })
+        }
+        break
+
+      case "RARE_ITEM":
+        const rarePool = ["Foresight Eye", "Warp Scroll", "Immunity Shield", "Duel Crest", "Snake Charm"]
+        const droppedItem = rarePool[Math.floor(Math.random() * rarePool.length)]
+        updatedPlayers = updatedPlayers.map((p, idx) => {
+          if (idx === playerIdx) {
+            return { ...p, inventory: [...p.inventory, droppedItem] }
+          }
+          return p
+        })
+        logMsg = `💎 Rare drop! ${player.name} uncovered a mythical [${droppedItem}]!`
+        logsType = "rare"
+        break
+
+      case "MARKETPLACE":
+        logMsg = `🛒 ${player.name} entered the mystical merchant Marketplace!`
+        if (!player.isBot) {
+          setShoppingPlayerId(player.id)
+        } else {
+          // Bot Marketplace purchases logic
+          if (player.coins >= 80) {
+            updatedPlayers = updatedPlayers.map((p, idx) => {
+              if (idx === playerIdx) {
+                return { ...p, coins: p.coins - 80, inventory: [...p.inventory, "Trap Shield"] }
+              }
+              return p
+            })
+            logMsg += ` Bot purchased a [Trap Shield] for 80 coins.`
+          }
+        }
+        break
+
+      case "QUEST":
+        const questGift = Math.floor(Math.random() * 20) + 15
+        updatedPlayers = updatedPlayers.map((p, idx) => {
+          if (idx === playerIdx) {
+            return { ...p, coins: p.coins + questGift }
+          }
+          return p
+        })
+        logMsg = `🧭 Quest shrine! ${player.name} received a coin boon (+${questGift} Coins).`
+        break
+
+      case "EVENT":
+        const eventId = Math.floor(Math.random() * 3)
+        if (eventId === 0) {
+          logMsg = `🌀 Event: Temporal Rift! Everyone receives a teleportation gift (+1 tile forward).`
+          updatedPlayers = updatedPlayers.map(p => ({
+            ...p,
+            tileIndex: Math.min(30, p.tileIndex + 1)
+          }))
+        } else if (eventId === 1) {
+          logMsg = `🌀 Event: Taxes of the Realm! Everyone loses 15 coins to the vault.`
+          updatedPlayers = updatedPlayers.map(p => ({
+            ...p,
+            coins: Math.max(0, p.coins - 15)
+          }))
+        } else {
+          logMsg = `🌀 Event: Winds of Chaos! The player in last place receives a coin bounty (+40 coins).`
+          let lastPlayerIdx = 0
+          let minTiles = 99
+          updatedPlayers.forEach((p, idx) => {
+            if (p.tileIndex < minTiles) {
+              minTiles = p.tileIndex
+              lastPlayerIdx = idx
+            }
+          })
+          updatedPlayers = updatedPlayers.map((p, idx) => {
+            if (idx === lastPlayerIdx) {
+              return { ...p, coins: p.coins + 40 }
+            }
+            return p
+          })
+        }
+        break
+
+      default:
+        logMsg = `👣 ${player.name} stopped safely on tile ${targetTileIndex}.`
+        break
+    }
+
+    // Check placed traps on this tile
+    if (tile.placedTrapBy && tile.placedTrapBy !== player.id) {
+      if (player.shieldActive) {
+        updatedPlayers = updatedPlayers.map((p, idx) => {
+          if (idx === playerIdx) {
+            return { ...p, shieldActive: false }
+          }
+          return p
+        })
+        logMsg += ` The shield blocked a player-laid trap!`
       } else {
-        goldChange = 15
-        logMsg = `🤖 ${bot.name} rolled and moved ${randomSteps} tiles along the ${chosenRoad} Road.`
-      }
-
-      updated = updated.map((p, idx) => {
-        if (idx === botIdx) {
-          return {
-            ...p,
-            tileIndex: nextTile,
-            hp: Math.max(0, p.hp + hpChange),
-            gold: p.gold + goldChange
+        const victimIndex = Math.max(0, targetTileIndex - 3)
+        updatedPlayers = updatedPlayers.map((p, idx) => {
+          if (idx === playerIdx) {
+            return { ...p, tileIndex: victimIndex }
           }
-        }
-        return p
-      })
-
-      // Check Throne win
-      if (nextTile === 10) {
-        const winLogs = [
-          { sender: "📢 Announcer", message: logMsg, type: "system" },
-          { sender: "📢 Announcer", message: `👑 Victory! ${bot.name} ascended the central Throne!`, type: "hype" }
-        ]
-        syncGameState(updated, botIdx, winLogs, { phase: "RESULTS" })
-        setPhase("RESULTS")
-        return
+          return p
+        })
+        logMsg += ` Stumbled on a custom trap laid by an opponent! Blasted back to tile ${victimIndex}.`
       }
+      // Remove custom trap after trigger
+      updatedBoard[targetTileIndex] = { ...tile, placedTrapBy: undefined }
     }
 
-    const nextIdx = (botIdx + 1) % players.length
-    
-    // Add economy yield
-    const nextPlayer = updated[nextIdx]
-    if (nextPlayer) {
-      updated = updated.map((p, idx) => {
-        if (idx === nextIdx) {
-          return {
-            ...p,
-            gold: p.gold + 10 + p.population.workers * 2,
-            wood: p.wood + 5 + p.buildings.houses * 2,
-            stone: p.stone + 2
-          }
-        }
-        return p
-      })
-    }
+    // Check for Duels (forced duel if landing on same tile as another player)
+    const occupants = updatedPlayers.filter((p, idx) => idx !== playerIdx && p.tileIndex === targetTileIndex && targetTileIndex > 0 && targetTileIndex < 30)
+    if (occupants.length > 0 && phase !== "DUEL") {
+      const opponent = occupants[0]
+      const duelLines = COMMENTATOR_LINES.duel
+      const duelQuote = duelLines[Math.floor(Math.random() * duelLines.length)]
+      
+      const newLogs = [
+        { sender: "📢 Announcer", message: logMsg, type: logsType },
+        { sender: "🎙️ Commentator", message: `⚔️ ${duelQuote} Duel triggered between ${player.name} and ${opponent.name}!`, type: "danger" }
+      ]
 
-    // Broadcast bot changes
-    if (updated[nextIdx]?.isBot) {
-      syncGameState(updated, botIdx, [{ sender: "📢 Announcer", message: logMsg, type: commentaryType }])
-      setTimeout(() => {
-        executeBotTurn(nextIdx, updated)
-      }, 1500)
-    } else {
-      syncGameState(updated, nextIdx, [{ sender: "📢 Announcer", message: logMsg, type: commentaryType }])
-    }
-  }
-
-  // ─── CHALLENGE & DUEL SYSTEM ────────────────────────────────────────────────
-  const triggerDuelChallenge = (targetId: string) => {
-    const challenger = players.find(p => p.id === "player")!
-    const defender = players.find(p => p.id === targetId)!
-
-    // Secret Risk spin setup (Roulette Lane)
-    const types: ("Trap" | "Reward" | "Special" | "Neutral")[] = ["Trap", "Reward", "Special", "Neutral"]
-    const generatedLane = Array.from({ length: 6 }).map((_, idx) => {
-      const type = types[Math.floor(Math.random() * types.length)]
-      return {
-        type,
-        resolved: false,
-        description: type === "Trap" ? "Hidden Pitfall" : type === "Reward" ? "Chest of Gold" : type === "Special" ? "Warp Portal" : "Safe Zone"
+      const nextDuel: DuelState = {
+        active: true,
+        challengerId: player.id,
+        defenderId: opponent.id,
+        challengerRoll: null,
+        defenderRoll: null,
+        logs: [`Challenger: ${player.name} • Defender: ${opponent.name}`]
       }
+
+      setDuel(nextDuel)
+      setPhase("DUEL")
+      syncGameState(updatedPlayers, playerIdx, newLogs, updatedBoard, { duel: nextDuel, phase: "DUEL" })
+      return
+    }
+
+    // Quest completion check
+    updatedPlayers = updatedPlayers.map((p, idx) => {
+      if (idx === playerIdx && p.activeQuest.progress >= p.activeQuest.target) {
+        const giftCoins = p.activeQuest.rewardCoins
+        let updatedInv = [...p.inventory]
+        if (p.activeQuest.rewardItem) {
+          updatedInv.push(p.activeQuest.rewardItem)
+        }
+        pushLog(`🧭 Quest Completed! ${p.name} completed [${p.activeQuest.description}]! (+${giftCoins}c, +${p.activeQuest.rewardItem || ""})`, "rare")
+        return {
+          ...p,
+          coins: p.coins + giftCoins,
+          inventory: updatedInv,
+          activeQuest: generateQuest()
+        }
+      }
+      return p
     })
 
-    const initialDuel: DuelState = {
-      active: true,
-      challengerId: challenger.id,
-      defenderId: defender.id,
-      challengerPos: 0,
-      defenderPos: 5,
-      laneTiles: generatedLane,
-      turnId: challenger.id,
-      logs: [`⚔️ A duel challenge was started between ${challenger.name} and ${defender.name}!`],
-      winnerId: null
+    // Check Victory
+    if (targetTileIndex === 30) {
+      const winLines = COMMENTATOR_LINES.win
+      const winQuote = winLines[Math.floor(Math.random() * winLines.length)]
+      const victoryLogs = [
+        { sender: "📢 Announcer", message: logMsg, type: "system" },
+        { sender: "🎙️ Commentator", message: `👑 ${winQuote} ${player.name} reaches the Throne!`, type: "hype" }
+      ]
+      setPhase("RESULTS")
+      syncGameState(updatedPlayers, playerIdx, victoryLogs, updatedBoard, { phase: "RESULTS" })
+      
+      if (player.id === "player") {
+        adjustCoins(userId, 40) // +40 global account coins
+      }
+      return
     }
 
-    setDuel(initialDuel)
-    setPhase("DUEL")
-    
-    // Announcer Speak
-    speak(`A formal challenge was issued by ${challenger.name}! Duel lane generated.`)
+    // Sync and proceed to next turn
+    syncGameState(updatedPlayers, playerIdx, [{ sender: "📢 Announcer", message: logMsg, type: logsType }], updatedBoard)
+    advanceTurn(updatedPlayers)
   }
 
-  const rollDuelDice = () => {
-    const duelRoll = Math.floor(Math.random() * 3) + 1 // max 3 step choices for tactical duels
-    const isChallengerTurn = duel.turnId === duel.challengerId
+  // ─── PLAYER MOVE SUBMISSION (CLICK TILE) ───────────────────────────────────
+  const movePlayerToTile = (targetTileIndex: number) => {
+    if (diceRoll === null || phase !== "PLAYING") return
+    const activePlayer = players[currentPlayerIdx]
+    if (activePlayer.id !== "player") return
 
-    let currentPos = isChallengerTurn ? duel.challengerPos : duel.defenderPos
-    let direction = isChallengerTurn ? 1 : -1
-    let nextPos = currentPos + (duelRoll * direction)
+    // Execute move
+    let updatedPlayers = players.map((p, idx) => {
+      if (idx === currentPlayerIdx) {
+        return { ...p, tileIndex: targetTileIndex }
+      }
+      return p
+    })
 
-    // Bound position
-    if (isChallengerTurn && nextPos > 5) nextPos = 5
-    if (!isChallengerTurn && nextPos < 0) nextPos = 0
+    resolveTileTrigger(currentPlayerIdx, targetTileIndex, updatedPlayers, board)
+  }
 
-    // Resolve tile event
-    const steppedTile = duel.laneTiles[nextPos]
-    let resolutionMsg = ""
-    let pointsWon = 0
+  // ─── BOT MOVEMENT CHOICES ──────────────────────────────────────────────────
+  const executeBotTurn = (botIdx: number, currentList: PlayerState[]) => {
+    const bot = currentList[botIdx]
+    if (!bot || phase !== "PLAYING") return
 
-    if (steppedTile) {
-      if (steppedTile.type === "Trap") {
-        resolutionMsg = `stepped on a Trap and lost ground! (Stunned)`
-      } else if (steppedTile.type === "Reward") {
-        resolutionMsg = `found a speed token! (Gained gold)`
-        pointsWon = 20
-      } else {
-        resolutionMsg = `advanced safely.`
+    // Roll movement
+    const steps = Math.floor(Math.random() * 6) + 1
+    // Choose tactical step: bot evaluates the safety of future tiles
+    let pickedStep = steps
+    for (let s = 1; s <= steps; s++) {
+      const targetIndex = Math.min(30, bot.tileIndex + s)
+      const tile = board[targetIndex]
+      // Smart bot avoids known Traps/Snakes if possible
+      if (tile.revealed && (tile.type === "TRAP" || tile.type === "SNAKE")) {
+        continue
+      }
+      pickedStep = s
+    }
+
+    const nextIndex = Math.min(30, bot.tileIndex + pickedStep)
+    pushLog(`🤖 ${bot.name} rolled a ${steps} and tactically chose to move ${pickedStep} space(s) to tile ${nextIndex}.`, "system")
+
+    let updatedPlayers = currentList.map((p, idx) => {
+      if (idx === botIdx) {
+        return { ...p, tileIndex: nextIndex }
+      }
+      return p
+    })
+
+    setTimeout(() => {
+      resolveTileTrigger(botIdx, nextIndex, updatedPlayers, board)
+    }, 1200)
+  }
+
+  // ─── INVENTORY ITEM ACTIVATION ─────────────────────────────────────────────
+  const useInventoryItem = (itemName: string) => {
+    const activePlayer = players[currentPlayerIdx]
+    if (activePlayer.id !== "player" || phase !== "PLAYING") return
+
+    let nextInv = [...activePlayer.inventory]
+    const idx = nextInv.indexOf(itemName)
+    if (idx < 0) return
+    nextInv.splice(idx, 1)
+
+    let updatedPlayers = players.map((p, index) => {
+      if (index === currentPlayerIdx) {
+        let shield = p.shieldActive
+        let snake = p.snakeImmunity
+        let duelB = p.duelBonus
+
+        if (itemName === "Trap Shield" || itemName === "Immunity Shield") {
+          shield = true
+          pushLog(`🛡️ ${p.name} activated a Shield! Protected from the next trap hazard.`, "system")
+        } else if (itemName === "Snake Charm") {
+          snake = true
+          pushLog(`🧿 ${p.name} activated a Snake Charm! Searing immunity to snakes.`, "system")
+        } else if (itemName === "Duel Crest") {
+          duelB = true
+          pushLog(`⚔️ ${p.name} activated a Duel Crest! +2 modifier on the next duel battle.`, "system")
+        } else if (itemName === "Warp Scroll") {
+          // Instantly warp forward
+          const jump = Math.floor(Math.random() * 3) + 3
+          const targetIndex = Math.min(30, p.tileIndex + jump)
+          pushLog(`🌀 ${p.name} read a Warp Scroll and teleported forward +${jump} spaces!`, "system")
+          
+          const warpedPlayers = players.map((pl, i) => {
+            if (i === currentPlayerIdx) {
+              return { ...pl, tileIndex: targetIndex, inventory: nextInv }
+            }
+            return pl
+          })
+          resolveTileTrigger(currentPlayerIdx, targetIndex, warpedPlayers, board)
+          return { ...p, tileIndex: targetIndex, inventory: nextInv }
+        } else if (itemName === "Reveal Vision" || itemName === "Foresight Eye") {
+          // Reveal next 3 tiles
+          const startIdx = p.tileIndex + 1
+          const nextBoard = board.map((t) => {
+            if (t.index >= startIdx && t.index <= startIdx + 2) {
+              return { ...t, revealed: true }
+            }
+            return t
+          })
+          setBoard(nextBoard)
+          pushLog(`👁️ ${p.name} casted Foresight! The next 3 tiles are now fully revealed.`, "system")
+          if (channelRef.current) {
+            channelRef.current.send({
+              type: 'broadcast',
+              event: 'game-event',
+              payload: { board: nextBoard }
+            })
+          }
+        } else if (itemName === "Trap Token") {
+          setPlacingTrap(true)
+          pushLog(`🧨 Choose a tile on the board to place your hidden explosive trap.`, "system")
+          return { ...p, inventory: nextInv }
+        } else if (itemName === "Reroll Token") {
+          setDiceRoll(null)
+          pushLog(`🎲 ${p.name} used a Reroll Token! The dice has reset.`, "system")
+        }
+
+        return {
+          ...p,
+          inventory: nextInv,
+          shieldActive: shield,
+          snakeImmunity: snake,
+          duelBonus: duelB
+        }
+      }
+      return p
+    })
+
+    if (itemName !== "Warp Scroll") {
+      setPlayers(updatedPlayers)
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'game-event',
+          payload: { players: updatedPlayers }
+        })
       }
     }
+  }
 
-    const activePlayerName = players.find(p => p.id === duel.turnId)?.name || "Player"
-    const nextLogs = [...duel.logs, `🎲 ${activePlayerName} rolled a ${duelRoll} and ${resolutionMsg}`]
-
-    // Check win condition (cross to other side)
-    const hasWon = (isChallengerTurn && nextPos === 5) || (!isChallengerTurn && nextPos === 0)
-    let winner: string | null = null
-    let nextPhase = phase
-
-    if (hasWon) {
-      winner = duel.turnId
-      nextLogs.push(`👑 Duel Victory! ${activePlayerName} crossed the lane boundary successfully!`)
-      nextPhase = "PLAYING"
-      triggerAlert(`${activePlayerName} won the duel!`, true)
-
-      // Apply inJail status change or free prisoner
-      const updated = players.map(p => {
-        if (p.id === (isChallengerTurn ? duel.defenderId : duel.challengerId)) {
-          // Imprison the loser
-          return { ...p, inJailBy: winner, jailTurns: 2 }
-        }
-        if (p.id === winner) {
-          // Reward winner
-          return { ...p, gold: p.gold + 40 }
-        }
-        return p
-      })
-      setPlayers(updated)
+  // Trap placing action click
+  const handleBoardTileClickForTrap = (tileIndex: number) => {
+    if (!placingTrap) return
+    const activePlayer = players[currentPlayerIdx]
+    
+    // Check constraints: cannot place on Start, Throne, or tiles with players on them
+    if (tileIndex === 0 || tileIndex === 30) {
+      alert("Cannot place traps on Start or Throne tiles!")
+      return
     }
 
-    const nextTurnId = isChallengerTurn ? duel.defenderId : duel.challengerId
+    const nextBoard = board.map(t => {
+      if (t.index === tileIndex) {
+        return { ...t, placedTrapBy: activePlayer.id }
+      }
+      return t
+    })
+    setBoard(nextBoard)
+    setPlacingTrap(false)
+    pushLog(`🧨 Hidden trap successfully armed on tile ${tileIndex}!`, "system")
+    
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'game-event',
+        payload: { board: nextBoard }
+      })
+    }
+  }
 
-    // If opponent is bot, simulate automatic bot response
-    const nextPlayerObj = players.find(p => p.id === nextTurnId)
+  // ─── PVP DUELING SYSTEM ────────────────────────────────────────────────────
+  const rollDuelDiceForActive = () => {
+    const isChallenger = duel.challengerId === players[currentPlayerIdx]?.id
+    const roll = Math.floor(Math.random() * 6) + 1
+    const playerObj = players.find(p => p.id === (isChallenger ? duel.challengerId : duel.defenderId))!
 
-    const updatedDuel: DuelState = {
-      ...duel,
-      challengerPos: isChallengerTurn ? nextPos : duel.challengerPos,
-      defenderPos: !isChallengerTurn ? nextPos : duel.defenderPos,
-      logs: nextLogs,
-      turnId: nextTurnId,
-      winnerId: winner,
-      active: !hasWon
+    let updatedDuel = { ...duel }
+    if (isChallenger) {
+      updatedDuel.challengerRoll = roll
+      updatedDuel.logs = [...duel.logs, `🎲 Challenger ${playerObj.name} rolled: ${roll}`]
+    } else {
+      updatedDuel.defenderRoll = roll
+      updatedDuel.logs = [...duel.logs, `🎲 Defender ${playerObj.name} rolled: ${roll}`]
     }
 
     setDuel(updatedDuel)
-    
-    if (hasWon) {
+
+    // Evaluate if both rolled
+    if (updatedDuel.challengerRoll !== null && updatedDuel.defenderRoll !== null) {
+      const challenger = players.find(p => p.id === duel.challengerId)!
+      const defender = players.find(p => p.id === duel.defenderId)!
+
+      let chScore = updatedDuel.challengerRoll + (challenger.duelBonus ? 2 : 0)
+      let defScore = updatedDuel.defenderRoll + (defender.duelBonus ? 2 : 0)
+
+      if (challenger.duelBonus) updatedDuel.logs.push(`🛡️ Challenger ${challenger.name} duel modifier (+2) applied.`)
+      if (defender.duelBonus) updatedDuel.logs.push(`🛡️ Defender ${defender.name} duel modifier (+2) applied.`)
+
+      if (chScore === defScore) {
+        updatedDuel.logs.push("⚖️ A perfect tie! Rolling again...")
+        updatedDuel.challengerRoll = null
+        updatedDuel.defenderRoll = null
+        setDuel(updatedDuel)
+        if (channelRef.current) {
+          channelRef.current.send({
+            type: 'broadcast',
+            event: 'game-event',
+            payload: { duel: updatedDuel }
+          })
+        }
+        return
+      }
+
+      const challengerWon = chScore > defScore
+      const winner = challengerWon ? challenger : defender
+      const loser = challengerWon ? defender : challenger
+
+      // Apply pushback penalty of 3 tiles to the loser
+      const backIndex = Math.max(0, loser.tileIndex - 3)
+      
+      const updatedPlayers = players.map(p => {
+        let duelBonusUsed = p.duelBonus
+        if (p.id === challenger.id) duelBonusUsed = false // consume bonus
+        if (p.id === defender.id) duelBonusUsed = false
+
+        if (p.id === loser.id) {
+          return { ...p, tileIndex: backIndex, duelBonus: duelBonusUsed }
+        }
+        if (p.id === winner.id) {
+          // Reward winner with coins and Quest progress
+          let qProgress = p.activeQuest.progress
+          if (p.activeQuest.type === "duel") {
+            qProgress = Math.min(p.activeQuest.target, qProgress + 1)
+          }
+          return { ...p, coins: p.coins + 30, duelBonus: duelBonusUsed, activeQuest: { ...p.activeQuest, progress: qProgress } }
+        }
+        return p
+      })
+
+      updatedDuel.logs.push(`👑 Winner: ${winner.name}! ${loser.name} is knocked back to tile ${backIndex}.`)
+      updatedDuel.active = false
+
+      setDuel(updatedDuel)
       setPhase("PLAYING")
-      pushLog(`⚔️ Duel concluded. ${activePlayerName} conquered the lane.`, "hype")
-      advancePlayerTurn()
+      pushLog(`⚔️ Duel concluded. ${winner.name} conquered the duel lane.`, "commentator")
+
+      syncGameState(updatedPlayers, currentPlayerIdx, [
+        { sender: "📢 Announcer", message: `⚔️ Duel winner: ${winner.name}! Loser knocked back 3 spaces.`, type: "system" }
+      ], board, { phase: "PLAYING", duel: updatedDuel })
+
+      // Proceed turn
+      advanceTurn(updatedPlayers)
     } else {
-      if (nextPlayerObj?.isBot) {
+      // Prompt bot defender to roll automatically
+      const defenderObj = players.find(p => p.id === duel.defenderId)!
+      if (defenderObj.isBot && !isChallenger) {
         setTimeout(() => {
-          simulateBotDuelStep(updatedDuel)
+          rollDuelDiceForBot(updatedDuel)
+        }, 1500)
+      } else if (defenderObj.isBot && isChallenger) {
+        // Trigger bot defensive roll
+        setTimeout(() => {
+          rollDuelDiceForBot(updatedDuel)
         }, 1500)
       }
     }
   }
 
-  const simulateBotDuelStep = (activeDuel: DuelState) => {
-    const duelRoll = Math.floor(Math.random() * 2) + 1
-    const isChallengerTurn = activeDuel.turnId === activeDuel.challengerId
+  // Simulating Bot duel dice roll
+  const rollDuelDiceForBot = (activeDuel: DuelState) => {
+    const roll = Math.floor(Math.random() * 6) + 1
+    const isChallenger = activeDuel.challengerId === players[currentPlayerIdx]?.id
+    const opponentId = isChallenger ? activeDuel.defenderId : activeDuel.challengerId
+    const opponentObj = players.find(p => p.id === opponentId)!
 
-    let currentPos = isChallengerTurn ? activeDuel.challengerPos : activeDuel.defenderPos
-    let direction = isChallengerTurn ? 1 : -1
-    let nextPos = currentPos + (duelRoll * direction)
-
-    if (isChallengerTurn && nextPos > 5) nextPos = 5
-    if (!isChallengerTurn && nextPos < 0) nextPos = 0
-
-    const botName = players.find(p => p.id === activeDuel.turnId)?.name || "Bot"
-    const nextLogs = [...activeDuel.logs, `🤖 ${botName} rolled a ${duelRoll} and advanced.`]
-
-    const hasWon = (isChallengerTurn && nextPos === 5) || (!isChallengerTurn && nextPos === 0)
-    let winner: string | null = null
-
-    if (hasWon) {
-      winner = activeDuel.turnId
-      nextLogs.push(`👑 Duel Victory! ${botName} crossed the lane boundary successfully!`)
-      
-      const updated = players.map(p => {
-        if (p.id === (isChallengerTurn ? activeDuel.defenderId : activeDuel.challengerId)) {
-          return { ...p, inJailBy: winner, jailTurns: 2 }
-        }
-        if (p.id === winner) {
-          return { ...p, gold: p.gold + 40 }
-        }
-        return p
-      })
-      setPlayers(updated)
-    }
-
-    const updatedDuel: DuelState = {
-      ...activeDuel,
-      challengerPos: isChallengerTurn ? nextPos : activeDuel.challengerPos,
-      defenderPos: !isChallengerTurn ? nextPos : activeDuel.defenderPos,
-      logs: nextLogs,
-      turnId: isChallengerTurn ? activeDuel.defenderId : activeDuel.challengerId,
-      winnerId: winner,
-      active: !hasWon
+    let updatedDuel = { ...activeDuel }
+    if (opponentId === activeDuel.challengerId) {
+      updatedDuel.challengerRoll = roll
+      updatedDuel.logs = [...activeDuel.logs, `🎲 Bot Challenger ${opponentObj.name} rolled: ${roll}`]
+    } else {
+      updatedDuel.defenderRoll = roll
+      updatedDuel.logs = [...activeDuel.logs, `🎲 Bot Defender ${opponentObj.name} rolled: ${roll}`]
     }
 
     setDuel(updatedDuel)
 
-    if (hasWon) {
+    // Evaluate
+    if (updatedDuel.challengerRoll !== null && updatedDuel.defenderRoll !== null) {
+      const challenger = players.find(p => p.id === activeDuel.challengerId)!
+      const defender = players.find(p => p.id === activeDuel.defenderId)!
+
+      let chScore = updatedDuel.challengerRoll + (challenger.duelBonus ? 2 : 0)
+      let defScore = updatedDuel.defenderRoll + (defender.duelBonus ? 2 : 0)
+
+      if (chScore === defScore) {
+        updatedDuel.logs.push("⚖️ A perfect tie! Rolling again...")
+        updatedDuel.challengerRoll = null
+        updatedDuel.defenderRoll = null
+        setDuel(updatedDuel)
+        return
+      }
+
+      const challengerWon = chScore > defScore
+      const winner = challengerWon ? challenger : defender
+      const loser = challengerWon ? defender : challenger
+
+      const backIndex = Math.max(0, loser.tileIndex - 3)
+      
+      const updatedPlayers = players.map(p => {
+        let duelBonusUsed = p.duelBonus
+        if (p.id === challenger.id) duelBonusUsed = false
+        if (p.id === defender.id) duelBonusUsed = false
+
+        if (p.id === loser.id) {
+          return { ...p, tileIndex: backIndex, duelBonus: duelBonusUsed }
+        }
+        if (p.id === winner.id) {
+          return { ...p, coins: p.coins + 30, duelBonus: duelBonusUsed }
+        }
+        return p
+      })
+
+      updatedDuel.logs.push(`👑 Winner: ${winner.name}! ${loser.name} is knocked back to tile ${backIndex}.`)
+      updatedDuel.active = false
+
+      setDuel(updatedDuel)
       setPhase("PLAYING")
-      pushLog(`⚔️ Duel concluded. ${botName} conquered the lane.`, "roast")
-      advancePlayerTurn()
+      pushLog(`⚔️ Duel concluded. ${winner.name} conquered the duel lane.`, "system")
+
+      syncGameState(updatedPlayers, currentPlayerIdx, [
+        { sender: "📢 Announcer", message: `⚔️ Duel winner: ${winner.name}! Loser knocked back 3 spaces.`, type: "system" }
+      ], board, { phase: "PLAYING", duel: updatedDuel })
+
+      advanceTurn(updatedPlayers)
+    }
+  }
+
+  // ─── SHOPPING MARKETPLACE ACTIONS ──────────────────────────────────────────
+  const buyShopItem = (itemName: string, cost: number) => {
+    const pIdx = players.findIndex(p => p.id === shoppingPlayerId)
+    if (pIdx < 0) return
+    const buyer = players[pIdx]
+
+    if (buyer.coins < cost) {
+      alert("Not enough coins!")
+      return
+    }
+
+    const updatedPlayers = players.map((p, idx) => {
+      if (idx === pIdx) {
+        return {
+          ...p,
+          coins: p.coins - cost,
+          inventory: [...p.inventory, itemName]
+        }
+      }
+      return p
+    })
+
+    setPlayers(updatedPlayers)
+    setShoppingPlayerId(null)
+    pushLog(`🛒 ${buyer.name} bought a [${itemName}] from the Marketplace.`, "system")
+
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'game-event',
+        payload: { players: updatedPlayers }
+      })
     }
   }
 
   const handleReset = () => {
     setPhase("SETUP")
     setPlayers([])
+    setBoard([])
     setLogs([])
   }
 
   return (
     <div className={`space-y-6 max-w-6xl mx-auto pb-10 ${shakeScreen ? "animate-bounce" : ""}`}>
-      {/* Dynamic alert banner */}
-      {alertMsg && (
-        <div className={`p-4 rounded-xl border text-xs font-bold animate-in slide-in-from-top duration-300 ${alertMsg.success ? "bg-emerald-950/40 border-emerald-500/20 text-emerald-400" : "bg-red-950/40 border-red-500/20 text-red-400"}`}>
-          {alertMsg.text}
-        </div>
-      )}
-
-      {/* Header section */}
+      
+      {/* Header Panel */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Link href="/dashboard/playlab" className="p-2 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl transition-all">
@@ -943,23 +1186,24 @@ export default function KingdomRushboardPage() {
             {soundMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
           </button>
           <div className="h-4 w-px bg-white/10" />
-          <span className="text-sm font-black text-white">{coins} Coins</span>
+          <span className="text-sm font-black text-white flex items-center gap-1.5">
+            <Zap className="h-4 w-4 text-yellow-400 fill-yellow-400" /> {globalCoins} Coins
+          </span>
         </div>
       </div>
 
-      {/* ── PHASE: SETUP CONFIGURATION ───────────────────────────────────────── */}
+      {/* ─── PHASE: SETUP ────────────────────────────────────────────────────── */}
       {phase === "SETUP" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
-          
           <div className="lg:col-span-2 rounded-3xl border border-orange-500/20 bg-gradient-to-br from-amber-950/20 via-black to-zinc-950 p-8 space-y-6 flex flex-col justify-between">
             <div className="space-y-5">
               <div>
                 <span className="px-2.5 py-0.5 bg-orange-500/10 text-orange-400 border border-orange-500/20 text-[10px] uppercase tracking-widest font-black rounded-full">
-                  Multiplayer Lobby
+                  Competitive Board Race
                 </span>
-                <h2 className="text-2xl font-black text-white mt-3">Configure Kingdom Arena</h2>
+                <h2 className="text-2xl font-black text-white mt-3">Enter the Rushboard Duel</h2>
                 <p className="text-sm text-gray-400 mt-1">
-                  Build your village, throw opponents in jail, engage in Russian Roulette duels, and race to the central Throne!
+                  Roll dice, make strategic movement decisions, trigger hidden snakes or traps, complete quests, buy powerful items, and race to claim the central Throne!
                 </p>
               </div>
 
@@ -970,7 +1214,7 @@ export default function KingdomRushboardPage() {
                   placeholder="Enter name..."
                   value={username}
                   onChange={e => setUsername(e.target.value)}
-                  className="w-full px-4 py-3 bg-white/5 rounded-xl border border-white/10 outline-none text-white focus:border-orange-500/50 text-sm"
+                  className="w-full px-4 py-3 bg-white/5 rounded-xl border border-white/10 outline-none text-white focus:border-orange-500/50 text-sm font-bold"
                 />
               </div>
 
@@ -983,37 +1227,36 @@ export default function KingdomRushboardPage() {
                   onChange={e => setRoomCodeInput(e.target.value.toUpperCase())}
                   className="w-24 px-4 py-3 bg-white/5 rounded-xl border border-white/10 outline-none text-white focus:border-orange-500/50 text-center font-black tracking-widest text-lg"
                 />
-                <Button onClick={joinLobbyByCode} className="bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl">
+                <Button onClick={joinLobbyByCode} className="bg-zinc-850 hover:bg-zinc-750 border border-white/5 text-white rounded-xl">
                   Join Room
                 </Button>
-                <Button onClick={hostLobby} className="bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-bold">
+                <Button onClick={hostLobby} className="bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-bold shadow-md shadow-orange-600/20">
                   Host Room
                 </Button>
               </div>
             </div>
-
-            <div className="border-t border-white/5 pt-4 text-center">
-              <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold block">No Single-player mode</span>
-              <p className="text-xs text-gray-400 mt-1">Starting host matchmaking auto-fills missing slots with tactical AI bots.</p>
+            <div className="border-t border-white/5 pt-4 text-left">
+              <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold block">Competitive Balance</span>
+              <p className="text-[11px] text-gray-400 mt-1">1 player per token. Fully competitive hidden-path board race. Bots fill empty slots.</p>
             </div>
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 flex flex-col justify-between space-y-4">
             <div className="space-y-4">
-              <h3 className="text-xs font-black uppercase text-gray-300 tracking-widest">Village Buildings Info</h3>
-              <div className="space-y-2 text-xs text-gray-400">
-                <p>🏠 <b>Houses</b>: Increases wood/stone yields per turn.</p>
-                <p>🧱 <b>Walls</b>: Minimizes damage/losses in duels.</p>
-                <p>🛒 <b>Market</b>: Adds passive gold yields per turn.</p>
-                <p>⚖️ <b>Jail</b>: Imprison captured explorers who hit traps.</p>
+              <h3 className="text-xs font-black uppercase text-gray-300 tracking-widest">Board Tile Encyclopedia</h3>
+              <div className="space-y-3.5 text-xs text-gray-400">
+                <p>💰 <b>Treasure</b>: Grants random Coin boosts.</p>
+                <p>🪤 <b>Traps</b>: Hidden bombs that stun or blow you backward.</p>
+                <p>🐍 <b>Snakes</b>: Severe setback slides sending you back 5 slots.</p>
+                <p>🛒 <b>Marketplace</b>: Land here to purchase protective shields and foresight spells.</p>
+                <p>💎 <b>Rare Items</b>: Low drop rate chest holding scrolls and charms.</p>
               </div>
             </div>
           </div>
-
         </div>
       )}
 
-      {/* ── PHASE: MULTIPLAYER LOBBY SCREEN ─────────────────────────────────── */}
+      {/* ─── PHASE: MULTIPLAYER LOBBY ────────────────────────────────────────── */}
       {phase === "MULTIPLAYER_LOBBY" && (
         <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch animate-in fade-in duration-300">
           <div className="lg:col-span-2 bg-zinc-950 p-6 rounded-3xl border border-white/10 flex flex-col justify-between space-y-6">
@@ -1024,7 +1267,7 @@ export default function KingdomRushboardPage() {
                 </span>
                 <h2 className="text-2xl font-black text-white mt-1">Lobby Room: {roomCode || "Hosting..."}</h2>
                 <p className="text-xs text-gray-400">
-                  {isLobbyHost ? "Invite friends. Fills empty slots with bots automatically when you launch." : "Waiting for host to launch matchmaking."}
+                  {isLobbyHost ? "Invite friends. Auto-fills remaining spots with bots when you launch." : "Waiting for host to launch matchmaking."}
                 </p>
               </div>
             </div>
@@ -1035,8 +1278,8 @@ export default function KingdomRushboardPage() {
                 {isReady ? "✓ Ready" : "Set Ready"}
               </Button>
               {isLobbyHost && (
-                <Button onClick={startMatch} className="flex-1 py-4 bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-extrabold">
-                  Launch Duel Arena
+                <Button onClick={startMatch} className="flex-1 py-4 bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-extrabold shadow-[0_0_15px_rgba(249,115,22,0.3)]">
+                  Launch Board Arena
                 </Button>
               )}
               <Button onClick={handleReset} className="bg-red-950/40 hover:bg-red-900/40 text-red-400 px-4 rounded-xl border border-red-500/20">
@@ -1061,306 +1304,383 @@ export default function KingdomRushboardPage() {
         </div>
       )}
 
-      {/* ── PHASE: PLAYING THE MATCH ────────────────────────────────────────── */}
+      {/* ─── PHASE: PLAYING THE MATCH ────────────────────────────────────────── */}
       {phase === "PLAYING" && (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start animate-in fade-in duration-500">
           
-          {/* Main Map View & Action Board */}
+          {/* Visual Path Winding Board */}
           <div className="lg:col-span-3 space-y-6">
-            
-            {/* World Map Road representation */}
-            <div className="rounded-3xl border border-orange-500/20 p-6 bg-gradient-to-br from-amber-950/10 to-zinc-950 space-y-6">
+            <div className="rounded-3xl border border-orange-500/10 p-6 bg-gradient-to-br from-zinc-950 to-black space-y-5">
+              
               <div className="flex justify-between items-center border-b border-white/5 pb-3">
                 <div>
-                  <span className="text-[10px] font-black uppercase text-orange-400 tracking-wider">World Map Paths</span>
-                  <h3 className="text-lg font-black text-white">Race to the Center Throne</h3>
+                  <span className="text-[10px] font-black uppercase text-orange-400 tracking-wider">Interactive Path Board</span>
+                  <h3 className="text-lg font-black text-white">Land on Hidden Tiles • Race to the Throne</h3>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs font-bold text-gray-400 block">Active Turn</span>
-                  <span className="text-sm font-black text-orange-400 flex items-center gap-1.5 justify-end">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase block">Active Turn</span>
+                  <span className="text-xs font-black text-orange-400 flex items-center gap-1 mt-0.5">
                     {players[currentPlayerIdx]?.emoji} {players[currentPlayerIdx]?.name}
                   </span>
                 </div>
               </div>
 
-              {/* Path Progress Tracker */}
-              <div className="space-y-4">
-                {players.map(p => {
-                  const isTurn = players[currentPlayerIdx]?.id === p.id
+              {/* Graphical Grid Board representation (6x6 snake path) */}
+              <div className="grid grid-cols-6 gap-3 pt-2 relative">
+                {board.map((tile) => {
+                  const occupants = players.filter(p => p.tileIndex === tile.index)
+                  const isCurrentPlayerLanded = players[currentPlayerIdx]?.tileIndex === tile.index
+                  
+                  // Compute if this tile is a valid destination choice
+                  const isMyTurn = players[currentPlayerIdx]?.id === "player"
+                  const maxAllowedStep = diceRoll !== null ? diceRoll : 0
+                  const playerPos = players[currentPlayerIdx]?.tileIndex || 0
+                  const isSelectableDestination = isMyTurn && diceRoll !== null && tile.index > playerPos && tile.index <= Math.min(30, playerPos + maxAllowedStep)
+
+                  // Styles
+                  let tileColors = "border-white/5 bg-zinc-900/60"
+                  if (tile.index === 0) tileColors = "border-orange-500/30 bg-orange-950/20"
+                  else if (tile.index === 30) tileColors = "border-yellow-500/40 bg-yellow-950/30 shadow-[0_0_15px_rgba(234,179,8,0.2)]"
+                  else if (tile.revealed) {
+                    if (tile.type === "TRAP") tileColors = "border-red-500/30 bg-red-950/20 text-red-400"
+                    else if (tile.type === "SNAKE") tileColors = "border-purple-500/30 bg-purple-950/20 text-purple-400"
+                    else if (tile.type === "TREASURE") tileColors = "border-yellow-500/30 bg-yellow-950/20 text-yellow-400"
+                    else if (tile.type === "MARKETPLACE") tileColors = "border-blue-500/30 bg-blue-950/20 text-blue-400"
+                    else if (tile.type === "RARE_ITEM") tileColors = "border-emerald-500/30 bg-emerald-950/20 text-emerald-400"
+                    else if (tile.type === "DUEL") tileColors = "border-pink-500/30 bg-pink-950/20 text-pink-400"
+                    else if (tile.type === "EVENT") tileColors = "border-cyan-500/30 bg-cyan-950/20 text-cyan-400"
+                    else if (tile.type === "QUEST") tileColors = "border-orange-500/30 bg-orange-950/20 text-orange-400"
+                  }
+
+                  const { x, y } = getTileCoords(tile.index)
+
                   return (
-                    <div key={p.id} className={`p-4 rounded-2xl border transition-all ${isTurn ? "border-orange-500 bg-orange-950/10 shadow-[0_0_15px_rgba(249,115,22,0.1)]" : "border-white/5 bg-white/5"}`}>
-                      <div className="flex justify-between items-center text-xs mb-2">
-                        <span className="font-bold text-white flex items-center gap-1.5">
-                          <span>{p.emoji}</span>
-                          {p.name} {p.id === "player" && <span className="text-[9px] bg-orange-500/20 text-orange-400 px-1.5 rounded">You</span>}
-                          {p.inJailBy && <span className="text-[9px] bg-red-500/20 text-red-400 px-1.5 rounded flex items-center gap-0.5"><ShieldAlert className="h-3 w-3" /> JAILED</span>}
-                        </span>
-                        <span className="text-gray-400 font-mono">Node {p.tileIndex} / 10</span>
+                    <div
+                      key={tile.index}
+                      onClick={() => {
+                        if (placingTrap) {
+                          handleBoardTileClickForTrap(tile.index)
+                        } else if (isSelectableDestination) {
+                          movePlayerToTile(tile.index)
+                        }
+                      }}
+                      style={{ gridColumnStart: x + 1, gridRowStart: y + 1 }}
+                      className={`h-20 sm:h-24 rounded-2xl border flex flex-col justify-between p-2 select-none relative transition-all duration-300
+                        ${tileColors}
+                        ${isSelectableDestination ? "shadow-[0_0_15px_rgba(16,185,129,0.5)] border-emerald-400 scale-[1.03] cursor-pointer hover:bg-emerald-950/20" : ""}
+                        ${placingTrap && tile.index > 0 && tile.index < 30 ? "shadow-[0_0_15px_rgba(239,68,68,0.5)] border-red-500 scale-[1.03] cursor-pointer hover:bg-red-950/20 animate-pulse" : ""}
+                      `}
+                    >
+                      <div className="flex justify-between items-center text-[9px] font-mono font-bold text-gray-500">
+                        <span>#{tile.index}</span>
+                        {tile.placedTrapBy && <span className="text-red-400 animate-pulse">🧨</span>}
                       </div>
-                      
-                      {/* Node track */}
-                      <div className="flex gap-1.5 items-center w-full">
-                        {Array.from({ length: 11 }).map((_, stepIdx) => {
-                          const isCurrent = p.tileIndex === stepIdx
-                          const isVisited = p.tileIndex > stepIdx
-                          return (
-                            <div key={stepIdx} 
-                              className={`flex-1 h-3.5 rounded-lg border transition-all ${
-                                isCurrent ? "bg-orange-500 border-orange-400 shadow-[0_0_8px_rgba(249,115,22,0.6)]" :
-                                isVisited ? "bg-amber-900 border-amber-950 opacity-40" : "bg-zinc-900 border-white/5"
-                              } ${stepIdx === 10 ? "relative flex items-center justify-center font-bold text-[8px] border-yellow-500 bg-yellow-950/20" : ""}`}
-                            >
-                              {stepIdx === 10 && "👑"}
-                            </div>
-                          )
-                        })}
+
+                      {/* Token occupants representation */}
+                      <div className="flex flex-wrap gap-1 justify-center items-center">
+                        {occupants.map(p => (
+                          <span key={p.id} className="text-xl sm:text-2xl animate-bounce drop-shadow" style={{ color: p.color }}>
+                            {p.emoji}
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* Revealed details or question mark */}
+                      <div className="text-[9px] font-bold text-center uppercase tracking-widest text-gray-400">
+                        {tile.index === 0 ? (
+                          <span className="text-orange-400">START</span>
+                        ) : tile.index === 30 ? (
+                          <span className="text-yellow-400 font-black">THRONE</span>
+                        ) : tile.revealed ? (
+                          <span>{tile.type}</span>
+                        ) : (
+                          <span className="text-gray-600">?</span>
+                        )}
                       </div>
                     </div>
                   )
                 })}
               </div>
+
             </div>
 
-            {/* Local player spatial Village dashboard & Action Center */}
+            {/* Dashboard & Interactions Console */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               
-              {/* Village Buildings */}
-              <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 space-y-4">
-                <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-1.5"><Home className="h-4 w-4 text-orange-400" /> Your Kingdom Village</h3>
-                
-                {(() => {
-                  const meObj = players.find(p => p.id === "player")
-                  if (!meObj) return null
-                  return (
-                    <div className="space-y-4">
-                      {/* Resource counters */}
-                      <div className="grid grid-cols-3 gap-3 bg-white/5 border border-white/5 p-3 rounded-2xl text-center">
-                        <div>
-                          <span className="text-[10px] text-gray-500 block uppercase font-bold">Gold</span>
-                          <span className="text-sm font-black text-yellow-400">{meObj.gold}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-gray-500 block uppercase font-bold">Wood</span>
-                          <span className="text-sm font-black text-orange-400">{meObj.wood}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-gray-500 block uppercase font-bold">Stone</span>
-                          <span className="text-sm font-black text-zinc-300">{meObj.stone}</span>
-                        </div>
-                      </div>
+              {/* Dynamic Interactive Dice roller */}
+              <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 flex flex-col items-center justify-between space-y-4">
+                <div className="w-full border-b border-white/5 pb-2 flex justify-between items-center">
+                  <h3 className="text-xs font-black text-white uppercase tracking-wider">Interactive Dice Engine</h3>
+                  <span className="text-[10px] text-gray-500 font-bold">SPIN TO MOVE</span>
+                </div>
 
-                      {/* Upgrade options */}
-                      <div className="space-y-2">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase">Construct Upgrades</span>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button onClick={() => buildStructure("houses")} className="p-3 bg-white/5 border border-white/5 rounded-xl hover:border-orange-500/30 text-left text-xs transition-colors">
-                            <h5 className="font-bold text-white">🏠 Houses ({meObj.buildings.houses})</h5>
-                            <p className="text-[9px] text-gray-500 mt-0.5">Cost: 30G, 20W, 10S</p>
-                          </button>
-                          <button onClick={() => buildStructure("market")} className="p-3 bg-white/5 border border-white/5 rounded-xl hover:border-orange-500/30 text-left text-xs transition-colors">
-                            <h5 className="font-bold text-white">🛒 Market ({meObj.buildings.market})</h5>
-                            <p className="text-[9px] text-gray-500 mt-0.5">Cost: 50G, 30W, 10S</p>
-                          </button>
-                        </div>
-                      </div>
+                <div className="flex flex-col items-center justify-center space-y-5 my-4">
+                  {/* Visual 3D style CSS dice face */}
+                  <div
+                    onClick={() => {
+                      if (players[currentPlayerIdx]?.id === "player") rollDice()
+                    }}
+                    className={`w-20 h-20 bg-gradient-to-br from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white rounded-3xl shadow-xl flex items-center justify-center border-2 border-orange-400/40 cursor-pointer select-none transition-transform duration-300
+                      ${isRolling ? "animate-spin scale-110" : "hover:scale-105 active:scale-95"}
+                    `}
+                  >
+                    {/* Render visual die dots based on current display value */}
+                    <div className="grid grid-cols-3 gap-1.5 p-3.5 w-full h-full justify-items-center items-center">
+                      {diceDisplayValue === 1 && (
+                        <>
+                          <div /><div /><div />
+                          <div /><div className="w-2.5 h-2.5 bg-white rounded-full" /><div />
+                          <div /><div /><div />
+                        </>
+                      )}
+                      {diceDisplayValue === 2 && (
+                        <>
+                          <div className="w-2.5 h-2.5 bg-white rounded-full" /><div /><div />
+                          <div /><div /><div />
+                          <div /><div /><div className="w-2.5 h-2.5 bg-white rounded-full" />
+                        </>
+                      )}
+                      {diceDisplayValue === 3 && (
+                        <>
+                          <div className="w-2.5 h-2.5 bg-white rounded-full" /><div /><div />
+                          <div /><div className="w-2.5 h-2.5 bg-white rounded-full" /><div />
+                          <div /><div /><div className="w-2.5 h-2.5 bg-white rounded-full" />
+                        </>
+                      )}
+                      {diceDisplayValue === 4 && (
+                        <>
+                          <div className="w-2.5 h-2.5 bg-white rounded-full" /><div /><div className="w-2.5 h-2.5 bg-white rounded-full" />
+                          <div /><div /><div />
+                          <div className="w-2.5 h-2.5 bg-white rounded-full" /><div /><div className="w-2.5 h-2.5 bg-white rounded-full" />
+                        </>
+                      )}
+                      {diceDisplayValue === 5 && (
+                        <>
+                          <div className="w-2.5 h-2.5 bg-white rounded-full" /><div /><div className="w-2.5 h-2.5 bg-white rounded-full" />
+                          <div /><div className="w-2.5 h-2.5 bg-white rounded-full" /><div />
+                          <div className="w-2.5 h-2.5 bg-white rounded-full" /><div /><div className="w-2.5 h-2.5 bg-white rounded-full" />
+                        </>
+                      )}
+                      {diceDisplayValue === 6 && (
+                        <>
+                          <div className="w-2.5 h-2.5 bg-white rounded-full" /><div /><div className="w-2.5 h-2.5 bg-white rounded-full" />
+                          <div className="w-2.5 h-2.5 bg-white rounded-full" /><div /><div className="w-2.5 h-2.5 bg-white rounded-full" />
+                          <div className="w-2.5 h-2.5 bg-white rounded-full" /><div /><div className="w-2.5 h-2.5 bg-white rounded-full" />
+                        </>
+                      )}
                     </div>
-                  )
-                })()}
+                  </div>
+
+                  <p className="text-[10px] text-gray-400 text-center font-bold">
+                    {isRolling ? "Spinning..." : "Click dice to roll"}
+                  </p>
+                </div>
+
+                {players[currentPlayerIdx]?.id === "player" && diceRoll !== null && (
+                  <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-[11px] text-center text-emerald-400 font-bold">
+                    💡 Click on one of the glowing board tiles to complete your move!
+                  </div>
+                )}
               </div>
 
-              {/* Action Console */}
+              {/* Inventory Management Panel */}
               <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 space-y-4">
-                <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-1.5"><Sword className="h-4 w-4 text-orange-400" /> Action Console</h3>
-                
+                <div className="border-b border-white/5 pb-2 flex justify-between items-center">
+                  <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <ShoppingBag className="h-4 w-4 text-orange-400" /> Backpack Inventory
+                  </h3>
+                  <span className="text-[10px] text-yellow-400 font-bold font-mono">
+                    {players.find(p => p.id === "player")?.coins} COINS
+                  </span>
+                </div>
+
                 {(() => {
-                  const meObj = players.find(p => p.id === "player")
-                  if (!meObj) return null
-                  const isMyTurn = players[currentPlayerIdx]?.id === "player"
-
-                  if (meObj.inJailBy) {
-                    return (
-                      <div className="p-4 bg-red-950/20 border border-red-500/20 rounded-2xl space-y-3">
-                        <h4 className="text-xs font-bold text-red-400 uppercase tracking-widest flex items-center gap-1">
-                          <ShieldAlert className="h-4 w-4" /> Locked in Prison!
-                        </h4>
-                        <p className="text-xs text-gray-400">You must escape the jail boundaries before moving.</p>
-                        <div className="flex gap-2">
-                          <Button onClick={() => executeJailAction("Bribe")} size="sm" className="flex-1 bg-yellow-600 hover:bg-yellow-500 text-black text-xs font-black">
-                            Bribe (50 Gold)
-                          </Button>
-                          <Button onClick={() => executeJailAction("Dice")} size="sm" className="flex-1 bg-red-600 hover:bg-red-500 text-white text-xs font-bold">
-                            Dice Trial (5+)
-                          </Button>
-                        </div>
-                      </div>
-                    )
-                  }
-
-                  if (!isMyTurn) {
-                    return (
-                      <div className="p-6 bg-white/5 border border-white/5 rounded-2xl text-center text-xs text-gray-500">
-                        ⏳ Announcer is commentating... Waiting for opponent's turn.
-                      </div>
-                    )
-                  }
-
+                  const me = players.find(p => p.id === "player")
+                  if (!me) return null
                   return (
                     <div className="space-y-4">
-                      {diceRoll === null ? (
-                        <Button onClick={rollDice} className="w-full py-6 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-extrabold rounded-2xl shadow-lg flex items-center justify-center gap-2">
-                          🎲 Roll Movement Dice
-                        </Button>
+                      {/* Active Status protections */}
+                      <div className="flex gap-2">
+                        {me.shieldActive && (
+                          <span className="text-[9px] bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
+                            <Shield className="h-3 w-3" /> Hazmat Shield Active
+                          </span>
+                        )}
+                        {me.snakeImmunity && (
+                          <span className="text-[9px] bg-purple-500/10 border border-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
+                            🧿 Snake Charm Active
+                          </span>
+                        )}
+                        {me.duelBonus && (
+                          <span className="text-[9px] bg-pink-500/10 border border-pink-500/20 text-pink-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
+                            ⚔️ Duel bonus (+2) Active
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Items grid list */}
+                      {me.inventory.length === 0 ? (
+                        <p className="text-xs text-gray-500 italic py-4 text-center">Your backpack is empty. Stop at Marketplace tiles to buy gear.</p>
                       ) : (
-                        <div className="space-y-3">
-                          <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-xl text-center text-xs text-orange-400 font-bold">
-                            You rolled a {diceRoll}! Choose route and steps to move.
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-gray-400 uppercase">Road Type</label>
-                              <select value={selectedRoad} onChange={e => setSelectedRoad(e.target.value as RoadType)} className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-xs text-white outline-none">
-                                <option value="Safe">Safe Road</option>
-                                <option value="Risky">Risky Road</option>
-                                <option value="Resource">Resource Road</option>
-                                <option value="Portal">Portal Route</option>
-                              </select>
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-gray-400 uppercase">Step Count</label>
-                              <select value={selectedSteps} onChange={e => setSelectedSteps(Number(e.target.value))} className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-xs text-white outline-none">
-                                {Array.from({ length: diceRoll }).map((_, i) => (
-                                  <option key={i + 1} value={i + 1}>{i + 1} Step(s)</option>
-                                ))}
-                              </select>
-                            </div>
-                          </div>
-
-                          <div className="flex gap-2">
-                            <Button onClick={executeMove} className="flex-grow bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-2.5">
-                              ✓ Move Explorer
-                            </Button>
-                            <Button onClick={() => setDiceRoll(null)} variant="outline" className="border-white/10 text-gray-300 text-xs py-2.5">
-                              Cancel
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Challenge option */}
-                      <div className="border-t border-white/5 pt-3">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Issue Duel Challenge</span>
-                        <div className="flex gap-2">
-                          {players.filter(p => p.id !== "player").map(p => (
-                            <button key={p.id} onClick={() => triggerDuelChallenge(p.id)} className="flex-1 py-2 bg-red-950/20 hover:bg-red-900/20 text-red-400 border border-red-500/20 rounded-xl text-[10px] font-bold">
-                              ⚔️ Challenge {p.name.split(" ")[0]}
+                        <div className="grid grid-cols-2 gap-2">
+                          {me.inventory.map((item, idx) => (
+                            <button
+                              key={idx}
+                              onClick={() => useInventoryItem(item)}
+                              disabled={players[currentPlayerIdx]?.id !== "player" || placingTrap}
+                              className="p-3 bg-white/5 border border-white/5 hover:border-orange-500/30 text-left rounded-xl transition-all disabled:opacity-40"
+                            >
+                              <h5 className="font-bold text-white text-xs">{item}</h5>
+                              <p className="text-[9px] text-gray-500 mt-0.5">Click to activate</p>
                             </button>
                           ))}
                         </div>
-                      </div>
+                      )}
                     </div>
                   )
                 })()}
               </div>
 
             </div>
-
           </div>
 
-          {/* Commentary Chronicle Log Feed */}
-          <div className="space-y-5">
-            <div className="rounded-3xl border border-white/10 bg-zinc-950 p-5 space-y-4 flex flex-col justify-between max-h-[450px]">
-              <h3 className="text-xs font-black uppercase text-gray-300 border-b border-white/5 pb-2 flex items-center gap-1.5">
-                🎙️ Arena Voice Chronicle
+          {/* Announcer chronicles logs & active quests sidebar */}
+          <div className="space-y-6">
+            
+            {/* Quest Panel */}
+            <div className="rounded-3xl border border-white/10 bg-zinc-950 p-5 space-y-4">
+              <h3 className="text-xs font-black uppercase text-gray-300 tracking-wider flex items-center gap-1.5">
+                <Star className="h-4 w-4 text-yellow-500" /> Active Quests
               </h3>
-              <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar min-h-[300px]">
+              {(() => {
+                const me = players.find(p => p.id === "player")
+                if (!me) return null
+                const q = me.activeQuest
+                return (
+                  <div className="p-3.5 bg-white/5 border border-white/5 rounded-2xl space-y-3.5 text-xs">
+                    <div>
+                      <h4 className="font-black text-white">{q.description}</h4>
+                      <span className="text-[9px] text-gray-400 uppercase tracking-widest block mt-0.5">Reward: +{q.rewardCoins} coins {q.rewardItem ? `, +${q.rewardItem}` : ""}</span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[10px] text-gray-400 font-bold">
+                        <span>Progress</span>
+                        <span>{q.progress} / {q.target}</span>
+                      </div>
+                      <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden border border-white/5">
+                        <div className="h-full bg-yellow-500 transition-all duration-300" style={{ width: `${(q.progress / q.target) * 100}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+
+            {/* Commentary Chronicle Logs */}
+            <div className="rounded-3xl border border-white/10 bg-zinc-950 p-5 space-y-4 flex flex-col justify-between max-h-[350px]">
+              <h3 className="text-xs font-black uppercase text-gray-300 border-b border-white/5 pb-2 flex items-center gap-1.5">
+                🎙️ Commentator Chronicle
+              </h3>
+              <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 custom-scrollbar min-h-[200px]">
                 {logs.map(log => (
-                  <div key={log.id} className={`p-2.5 rounded-xl border text-xs leading-relaxed ${log.type === "hype" ? "bg-orange-500/10 border-orange-500/20 text-orange-300 font-bold" : log.type === "roast" ? "bg-red-950/20 border-red-500/20 text-red-400 font-bold" : "bg-white/5 border-white/5 text-gray-400"}`}>
+                  <div key={log.id} className={`p-2.5 rounded-xl border text-xs leading-relaxed ${
+                    log.type === "commentator" ? "bg-orange-500/10 border-orange-500/20 text-orange-300 font-bold" :
+                    log.type === "danger" ? "bg-red-950/20 border-red-500/20 text-red-400 font-bold animate-pulse" :
+                    log.type === "rare" ? "bg-emerald-950/20 border-emerald-500/20 text-emerald-400 font-bold" :
+                    "bg-white/5 border-white/5 text-gray-400"
+                  }`}>
                     <span className="font-extrabold mr-1 text-[10px] text-gray-500">{log.sender}:</span>
                     {log.message}
                   </div>
                 ))}
-                <div ref={chatEndRef} />
+                <div ref={logsEndRef} />
               </div>
             </div>
+
           </div>
 
         </div>
       )}
 
-      {/* ── PHASE: PvP DUEL LANE SCREEN ──────────────────────────────────────── */}
+      {/* ─── PHASE: PVP DUEL SCORING SCREEN ──────────────────────────────────── */}
       {phase === "DUEL" && (
-        <div className="max-w-3xl mx-auto rounded-3xl border border-red-500/30 bg-gradient-to-br from-red-950/10 via-black to-zinc-950 p-8 space-y-8 animate-in zoom-in duration-500">
-          
+        <div className="max-w-2xl mx-auto rounded-3xl border border-red-500/30 bg-gradient-to-br from-red-950/10 via-black to-zinc-950 p-8 space-y-8 animate-in zoom-in duration-500">
           <div className="text-center space-y-2 border-b border-red-500/20 pb-4">
             <span className="px-3 py-1 bg-red-500/10 text-red-400 border border-red-500/20 text-xs uppercase tracking-widest font-black rounded-full">
               ⚔️ PVP DUEL ARENA
             </span>
-            <h2 className="text-3xl font-black text-white">Roulette duel lane</h2>
-            <p className="text-xs text-gray-400">First explorer to reach the opponent's side wins the duel and conquers territory.</p>
+            <h2 className="text-3xl font-black text-white">Board Conflict Duel</h2>
+            <p className="text-xs text-gray-400">Roll the highest number to win and knock back your opponent 3 slots.</p>
           </div>
 
-          {/* Duel lane rendering (6 tiles) */}
-          <div className="space-y-4 py-4">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block text-center">Roulette Risk Lane (6 Tiles)</span>
-            
-            <div className="grid grid-cols-6 gap-2">
-              {duel.laneTiles.map((tile, idx) => {
-                const isChallengerPos = duel.challengerPos === idx
-                const isDefenderPos = duel.defenderPos === idx
-                return (
-                  <div key={idx} className={`h-28 rounded-2xl border flex flex-col items-center justify-between p-2.5 transition-all ${
-                    isChallengerPos ? "border-yellow-500 bg-yellow-950/30 shadow-[0_0_15px_rgba(234,179,8,0.2)]" :
-                    isDefenderPos ? "border-blue-500 bg-blue-950/30 shadow-[0_0_15px_rgba(59,130,246,0.2)]" :
-                    "border-white/5 bg-white/5"
-                  }`}>
-                    <span className="text-[10px] font-bold text-gray-500 uppercase font-mono">Tile {idx + 1}</span>
-                    
-                    {/* Character position indicators */}
-                    <div className="flex flex-col gap-1 items-center">
-                      {isChallengerPos && <span className="text-2xl animate-pulse">👑</span>}
-                      {isDefenderPos && <span className="text-2xl animate-pulse">🤖</span>}
-                      {!isChallengerPos && !isDefenderPos && <span className="text-lg opacity-25">❓</span>}
-                    </div>
-
-                    <span className="text-[9px] font-bold text-gray-400">{tile.type}</span>
+          <div className="grid grid-cols-2 gap-6 text-center">
+            {/* Challenger info */}
+            {(() => {
+              const challenger = players.find(p => p.id === duel.challengerId)!
+              const isChallengerActive = players[currentPlayerIdx]?.id === duel.challengerId
+              return (
+                <div className="p-5 rounded-2xl border border-white/5 bg-white/5 space-y-4">
+                  <span className="text-[10px] text-gray-500 uppercase font-black tracking-widest block">Challenger</span>
+                  <div className="text-4xl">{challenger.emoji}</div>
+                  <h4 className="text-lg font-black text-white">{challenger.name}</h4>
+                  {challenger.duelBonus && <span className="text-[10px] text-yellow-400 font-bold">Crest Active (+2)</span>}
+                  
+                  <div className="h-16 flex items-center justify-center border border-white/10 rounded-xl bg-black/40">
+                    {duel.challengerRoll !== null ? (
+                      <span className="text-3xl font-black text-white">{duel.challengerRoll}</span>
+                    ) : (
+                      <span className="text-xs text-gray-500 italic">Waiting...</span>
+                    )}
                   </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Duel interaction panel */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch border-t border-white/5 pt-6">
-            
-            <div className="space-y-4">
-              <h4 className="text-xs font-black uppercase text-gray-300 tracking-wider">Duel Chronicle Feed</h4>
-              <div className="bg-black/60 border border-white/5 p-4 rounded-2xl max-h-[150px] overflow-y-auto space-y-1.5 text-xs text-gray-400">
-                {duel.logs.map((l, i) => <p key={i}>{l}</p>)}
-              </div>
-            </div>
-
-            <div className="flex flex-col justify-center items-center space-y-4">
-              {duel.turnId === "player" ? (
-                <Button onClick={rollDuelDice} className="w-full py-6 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white font-black text-lg rounded-2xl shadow-xl flex items-center justify-center gap-2">
-                  🎲 Roll Duel Dice (1-3)
-                </Button>
-              ) : (
-                <div className="p-4 bg-white/5 border border-white/5 rounded-2xl text-center text-xs text-gray-500">
-                  ⏳ Announcer is commentating... Opponent is rolling.
                 </div>
-              )}
-            </div>
+              )
+            })()}
 
+            {/* Defender info */}
+            {(() => {
+              const defender = players.find(p => p.id === duel.defenderId)!
+              const isDefenderActive = players[currentPlayerIdx]?.id === duel.defenderId
+              return (
+                <div className="p-5 rounded-2xl border border-white/5 bg-white/5 space-y-4">
+                  <span className="text-[10px] text-gray-500 uppercase font-black tracking-widest block">Defender</span>
+                  <div className="text-4xl">{defender.emoji}</div>
+                  <h4 className="text-lg font-black text-white">{defender.name}</h4>
+                  {defender.duelBonus && <span className="text-[10px] text-yellow-400 font-bold">Crest Active (+2)</span>}
+                  
+                  <div className="h-16 flex items-center justify-center border border-white/10 rounded-xl bg-black/40">
+                    {duel.defenderRoll !== null ? (
+                      <span className="text-3xl font-black text-white">{duel.defenderRoll}</span>
+                    ) : (
+                      <span className="text-xs text-gray-500 italic">Waiting...</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })()}
           </div>
 
+          {/* Interactive roll controls */}
+          <div className="border-t border-white/5 pt-6 flex flex-col justify-center items-center space-y-4">
+            <div className="bg-black/60 border border-white/5 p-4 rounded-2xl w-full max-h-[120px] overflow-y-auto space-y-1 text-xs text-gray-400">
+              {duel.logs.map((l, i) => <p key={i}>{l}</p>)}
+            </div>
+
+            {((duel.challengerId === players[currentPlayerIdx]?.id && duel.challengerRoll === null) ||
+              (duel.defenderId === players[currentPlayerIdx]?.id && duel.defenderRoll === null)) ? (
+              <Button onClick={rollDuelDiceForActive} className="w-full py-5 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white font-black text-lg rounded-2xl shadow-xl flex items-center justify-center gap-2">
+                🎲 Roll Duel Die
+              </Button>
+            ) : (
+              <p className="text-xs text-gray-500 italic">Narrator commentating on duel rolls...</p>
+            )}
+          </div>
         </div>
       )}
 
-      {/* ── PHASE: RESULTS SCREEN ────────────────────────────────────────────── */}
+      {/* ─── PHASE: RESULTS SCREEN ────────────────────────────────────────────── */}
       {phase === "RESULTS" && (
-        <div className="max-w-md mx-auto border p-8 rounded-3xl text-center space-y-6 bg-gradient-to-br from-orange-900/40 via-zinc-900 to-black border-orange-500/30"
-          style={{ boxShadow: "0 0 60px 20px rgba(249,115,22,0.1)" }}>
+        <div className="max-w-md mx-auto border p-8 rounded-3xl text-center space-y-6 bg-gradient-to-br from-orange-950/40 via-zinc-950 to-black border-orange-500/30 shadow-[0_0_50px_rgba(249,115,22,0.1)] animate-in zoom-in duration-500">
           <div className="inline-flex p-4 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-400 animate-bounce">
             <Trophy className="h-10 w-10 text-yellow-400" />
           </div>
@@ -1368,23 +1688,23 @@ export default function KingdomRushboardPage() {
           <div>
             <h2 className="text-2xl font-black text-white">Match Concluded</h2>
             <p className="text-xs text-gray-400 max-w-xs mx-auto mt-2 leading-relaxed">
-              Ascension records successfully finalized. PlayLab Coins awarded.
+              Ascension records finalized. PlayLab Coins awarded.
             </p>
           </div>
 
           {/* Ranking list */}
           <div className="bg-black/60 border border-white/5 p-4 rounded-2xl space-y-3 text-left">
-            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Rankings</h4>
-            <div className="space-y-1.5 text-xs text-white">
+            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Final Leaderboard</h4>
+            <div className="space-y-2 text-xs text-white">
               {players
                 .sort((a, b) => b.tileIndex - a.tileIndex)
                 .map((p, idx) => (
-                  <div key={p.id} className="flex justify-between items-center py-1 border-b border-white/5 last:border-0">
+                  <div key={p.id} className="flex justify-between items-center py-2 border-b border-white/5 last:border-0">
                     <span className="font-bold flex items-center gap-1.5">
-                      <span>{idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : "🐾"}</span>
+                      <span>{idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : "👣"}</span>
                       {p.name} {p.id === "player" && <span className="text-[9px] bg-orange-500/20 text-orange-400 px-1 rounded">You</span>}
                     </span>
-                    <span className="text-gray-400">Node {p.tileIndex}</span>
+                    <span className="text-gray-400 font-mono">Tile #{p.tileIndex}</span>
                   </div>
                 ))}
             </div>
@@ -1396,7 +1716,58 @@ export default function KingdomRushboardPage() {
 
           <div className="flex gap-3">
             <Button onClick={handleReset} className="flex-grow bg-orange-600 hover:bg-orange-500 text-white py-3.5 rounded-2xl text-xs font-bold">
-              <RotateCcw className="h-4 w-4 mr-1 inline-block" /> Re-launch Arena
+              <RotateCcw className="h-4 w-4 mr-1 inline-block" /> Re-launch Duel Arena
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL: Marketplace Shop Buy items ───────────────────────────────── */}
+      {shoppingPlayerId && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-zinc-950 p-6 space-y-6">
+            <div className="flex justify-between items-center border-b border-white/5 pb-2">
+              <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                <ShoppingBag className="h-4 w-4 text-orange-400" /> Marketplace Merchant
+              </h3>
+              <span className="text-[10px] text-yellow-400 font-bold font-mono">
+                {players.find(p => p.id === shoppingPlayerId)?.coins}c
+              </span>
+            </div>
+
+            <p className="text-xs text-gray-400">Select an item to buy using your earned match coins:</p>
+
+            <div className="space-y-2.5">
+              {[
+                { name: "Trap Shield", desc: "Absorbs next trap blast", cost: 80 },
+                { name: "Snake Charm", desc: "Grants immunity to snakes", cost: 60 },
+                { name: "Duel Crest", desc: "Gain +2 roll bonus on next duel", cost: 65 },
+                { name: "Reveal Vision", desc: "Reveals next 3 tiles ahead", cost: 50 },
+                { name: "Trap Token", desc: "Place a custom trap on the board", cost: 70 },
+                { name: "Warp Scroll", desc: "Jump forward +3-5 spaces", cost: 90 },
+              ].map(item => {
+                const buyer = players.find(p => p.id === shoppingPlayerId)!
+                const canBuy = buyer.coins >= item.cost
+                return (
+                  <div key={item.name} className="flex items-center justify-between p-3 bg-white/5 border border-white/5 rounded-2xl">
+                    <div>
+                      <h5 className="font-bold text-white text-xs">{item.name}</h5>
+                      <p className="text-[9px] text-gray-500 mt-0.5">{item.desc}</p>
+                    </div>
+                    <Button
+                      onClick={() => buyShopItem(item.name, item.cost)}
+                      disabled={!canBuy}
+                      className="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30 text-xs px-2.5 h-7 font-black rounded-lg"
+                    >
+                      {item.cost}c
+                    </Button>
+                  </div>
+                )
+              })}
+            </div>
+
+            <Button onClick={() => setShoppingPlayerId(null)} className="w-full bg-white/5 hover:bg-white/10 text-gray-400 text-xs py-2 rounded-xl">
+              Close Merchant
             </Button>
           </div>
         </div>
