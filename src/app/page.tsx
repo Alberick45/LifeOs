@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Sparkles, Brain, Heart, Shield, X, ChevronLeft, ChevronRight,
-  Users, BarChart2, Calendar, Network, MessageCircle, Star, Zap, Search, Plus
+  Users, BarChart2, Calendar, MessageCircle, Star, Zap, Plus, Gamepad2
 } from "lucide-react"
 
 // ------- Demo Slides -------
@@ -219,6 +219,44 @@ const DEMO_SLIDES = [
             <span className={`text-xs shrink-0 ${r.urgent ? "text-yellow-400 font-medium" : "text-gray-500"}`}>{r.date}</span>
           </div>
         ))}
+      </div>
+    )
+  },
+  {
+    id: 7,
+    title: "PlayLab 🎮",
+    subtitle: "Play relationship-powered mini-games with friends",
+    color: "from-pink-500/20 to-indigo-500/10",
+    accent: "text-pink-400",
+    accentBorder: "border-pink-500/30",
+    icon: Gamepad2,
+    content: (
+      <div className="space-y-4">
+        <p className="text-xs text-gray-400 leading-relaxed">
+          PlayLab turns your HumanOS network into a playground. Compete with friends, earn coins, and level up your vocabulary, memory, and strategy skills — all powered by your real connections.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { name: "Chaos Alphabet", desc: "Race to name things A–Z", emoji: "🔤", color: "border-primary/30 bg-primary/5", badge: "Multiplayer" },
+            { name: "Word Chemy", desc: "Craft words from letter potions", emoji: "⚗️", color: "border-emerald-500/30 bg-emerald-500/5", badge: "Solo" },
+            { name: "Memory Hunter", desc: "Find hidden pairs under pressure", emoji: "🧠", color: "border-blue-500/30 bg-blue-500/5", badge: "Multiplayer" },
+            { name: "Secret Card Hunt", desc: "Outsmart opponents card by card", emoji: "🃏", color: "border-yellow-500/30 bg-yellow-500/5", badge: "Solo" },
+            { name: "Creature Forge", desc: "Build mythical creatures from elements", emoji: "🐉", color: "border-rose-500/30 bg-rose-500/5", badge: "Solo" },
+            { name: "Country War", desc: "Geographic trivia battle royale", emoji: "🌍", color: "border-teal-500/30 bg-teal-500/5", badge: "Multiplayer" },
+          ].map((game) => (
+            <div key={game.name} className={`rounded-xl p-3 border ${game.color} flex flex-col gap-1`}>
+              <div className="flex items-center justify-between">
+                <span className="text-lg">{game.emoji}</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-gray-400 font-medium">{game.badge}</span>
+              </div>
+              <p className="text-xs font-semibold text-white mt-1">{game.name}</p>
+              <p className="text-[11px] text-gray-500 leading-snug">{game.desc}</p>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 p-3 bg-pink-500/10 border border-pink-500/20 rounded-xl text-xs text-pink-300">
+          <Gamepad2 className="h-3.5 w-3.5 shrink-0" /> Invite friends via their HumanOS handle and play live!
+        </div>
       </div>
     )
   },
