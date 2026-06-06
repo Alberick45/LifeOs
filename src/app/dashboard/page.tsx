@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Plus, User, Heart, ShieldAlert, Loader2, Archive, ArchiveRestore, Globe } from "lucide-react"
+import { Plus, User, Heart, ShieldAlert, Loader2, Archive, ArchiveRestore, Globe, Smartphone } from "lucide-react"
 import { motion } from "framer-motion"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
@@ -28,6 +28,66 @@ function DashboardContent() {
   const [showArchived, setShowArchived] = useState(false)
   const searchParams = useSearchParams()
   const q = searchParams.get('q')
+
+  const handleImportContacts = async () => {
+    const contactsApi = typeof navigator !== "undefined" && (navigator as any).contacts;
+    if (!contactsApi) {
+      alert("📱 Native contact selection is only supported on mobile devices (Chrome/Edge on Android, Safari on iOS).\n\nIf you are on a computer, try opening this page on your phone's browser to import your contacts in one tap!");
+      return;
+    }
+
+    try {
+      // Prompt user to select contacts natively
+      const props = ['name', 'tel', 'email'];
+      const options = { multiple: true };
+      
+      const selectedContacts = await contactsApi.select(props, options);
+      if (!selectedContacts || selectedContacts.length === 0) {
+        return;
+      }
+
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      // Build database rows for selected contacts
+      const peopleInserts = selectedContacts.map((c: any) => {
+        const displayName = c.name?.[0] || c.tel?.[0] || "Imported Connection";
+        const phone = c.tel?.[0] || null;
+        const email = c.email?.[0] || null;
+
+        return {
+          user_id: user.id,
+          name: displayName,
+          relationship_type: "Imported",
+          strength_score: 50,
+          trust_score: 50,
+          phone: phone,
+          email: email,
+          is_archived: false
+        };
+      });
+
+      const { error } = await supabase
+        .from('people')
+        .insert(peopleInserts);
+
+      if (error) throw error;
+
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("lifeos_people_cache");
+      }
+      
+      alert(`🎉 Successfully imported ${selectedContacts.length} contact(s) into your network!`);
+      
+      await fetchPeople();
+    } catch (err) {
+      console.error("Failed to import contacts:", err);
+      alert("Failed to import contacts. Please ensure you have granted access permissions.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     // Load from cache first for instant rendering
@@ -185,13 +245,21 @@ function DashboardContent() {
           <h1 className="text-3xl font-bold tracking-tight">Your Network</h1>
           <p className="text-gray-400 mt-1">Manage and nurture your relationships.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap justify-end">
           <Button 
             variant={showArchived ? "default" : "outline"}
             onClick={() => setShowArchived(!showArchived)}
             className={`rounded-full ${showArchived ? "bg-red-500 hover:bg-red-600 text-white" : "border-white/10 text-gray-400 hover:text-white"}`}
           >
             <Archive className="mr-2 h-4 w-4" /> {showArchived ? "Viewing Archived" : "View Archived"}
+          </Button>
+          <Button 
+            variant="outline"
+            onClick={handleImportContacts}
+            disabled={loading}
+            className="rounded-full border-white/10 text-gray-300 hover:text-white hover:bg-white/5"
+          >
+            <Smartphone className="mr-2 h-4 w-4 text-purple-400" /> Import Contacts
           </Button>
           <Link href="/dashboard/add">
             <Button className="rounded-full shadow-[0_0_15px_rgba(139,92,246,0.5)]">
