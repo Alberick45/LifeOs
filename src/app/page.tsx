@@ -477,18 +477,17 @@ export default function Home() {
             <div className="space-y-3">
               <p className="text-xs font-semibold text-gray-300 tracking-wider uppercase">Product</p>
               <ul className="space-y-2.5">
-                {[
-                  { label: "Get Started", href: "/login" },
-                  { label: "View Demo", href: "#", onClick: true },
-                  { label: "PlayLab Games", href: "/dashboard/playlab" },
-                  { label: "Network Graph", href: "/dashboard/network" },
-                ].map((item) => (
-                  <li key={item.label}>
-                    <Link href={item.href} className="text-sm text-gray-500 hover:text-white transition-colors">
-                      {item.label}
-                    </Link>
-                  </li>
-                ))}
+                <li><Link href="/login" className="text-sm text-gray-500 hover:text-white transition-colors">Get Started</Link></li>
+                <li>
+                  <button
+                    onClick={() => setShowDemo(true)}
+                    className="text-sm text-gray-500 hover:text-white transition-colors text-left"
+                  >
+                    View Demo
+                  </button>
+                </li>
+                <li><Link href="/dashboard/playlab" className="text-sm text-gray-500 hover:text-white transition-colors">PlayLab Games</Link></li>
+                <li><Link href="/dashboard/network" className="text-sm text-gray-500 hover:text-white transition-colors">Network Graph</Link></li>
               </ul>
             </div>
 
@@ -500,7 +499,7 @@ export default function Home() {
                   { label: "Privacy Policy", href: "/privacy" },
                   { label: "Terms of Service", href: "/terms" },
                   { label: "FAQ", href: "/faq" },
-                  { label: "Contact Support", href: "mailto:support@humanos.app" },
+                  { label: "Contact Support", href: "mailto:alberick2020@outlook.com" },
                 ].map((item) => (
                   <li key={item.label}>
                     <Link href={item.href} className="text-sm text-gray-500 hover:text-white transition-colors">
@@ -521,7 +520,7 @@ export default function Home() {
               <Link href="/privacy" className="hover:text-gray-400 transition-colors">Privacy</Link>
               <Link href="/terms" className="hover:text-gray-400 transition-colors">Terms</Link>
               <Link href="/faq" className="hover:text-gray-400 transition-colors">FAQ</Link>
-              <a href="mailto:support@humanos.app" className="hover:text-gray-400 transition-colors">support@humanos.app</a>
+              <a href="mailto:alberick2020@outlook.com" className="hover:text-gray-400 transition-colors">alberick2020@outlook.com</a>
             </div>
           </div>
         </div>

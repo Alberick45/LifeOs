@@ -71,7 +71,7 @@ export default function PrivacyPage() {
             },
             {
               title: "10. Contact Us",
-              body: `If you have any questions, concerns, or requests regarding your privacy, please contact us at privacy@humanos.app. We aim to respond to all privacy enquiries within 5 business days.`
+              body: `If you have any questions, concerns, or requests regarding your privacy, please contact us at alberick2020@outlook.com. We aim to respond to all privacy enquiries within 5 business days.`
             },
           ].map((section) => (
             <section key={section.title} className="pb-8 border-b border-white/5 last:border-0">

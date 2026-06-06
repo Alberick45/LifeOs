@@ -43,7 +43,7 @@ export default function TermsPage() {
             },
             {
               title: "3. Account Responsibilities",
-              body: `You are responsible for maintaining the confidentiality of your account credentials and for all activity that occurs under your account. You agree to notify us immediately at support@humanos.app if you suspect any unauthorised use of your account. We cannot be held liable for any loss or damage arising from your failure to protect your login credentials.`
+              body: `You are responsible for maintaining the confidentiality of your account credentials and for all activity that occurs under your account. You agree to notify us immediately at alberick2020@outlook.com if you suspect any unauthorised use of your account. We cannot be held liable for any loss or damage arising from your failure to protect your login credentials.`
             },
             {
               title: "4. Acceptable Use",
@@ -79,7 +79,7 @@ export default function TermsPage() {
             },
             {
               title: "12. Contact",
-              body: `If you have any questions about these Terms, please contact us at legal@humanos.app.`
+              body: `If you have any questions about these Terms, please contact us at alberick2020@outlook.com.`
             },
           ].map((section) => (
             <section key={section.title} className="pb-8 border-b border-white/5 last:border-0">
