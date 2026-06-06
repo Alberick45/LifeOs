@@ -450,6 +450,82 @@ export default function Home() {
       <AnimatePresence>
         {showDemo && <DemoModal onClose={() => setShowDemo(false)} />}
       </AnimatePresence>
+
+      {/* Footer */}
+      <footer className="border-t border-white/5 bg-black/30 backdrop-blur-sm">
+        <div className="max-w-6xl mx-auto px-6 py-12">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-10">
+            {/* Brand */}
+            <div className="md:col-span-2 space-y-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                <span className="font-bold text-lg tracking-tight text-white">HumanOS</span>
+              </div>
+              <p className="text-sm text-gray-500 leading-relaxed max-w-xs">
+                A living memory system for your most meaningful relationships. Private by design. Intelligent by nature.
+              </p>
+              <div className="flex items-center gap-1.5 mt-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                </span>
+                <span className="text-xs text-primary font-medium">Phase 1 MVP — Now Live</span>
+              </div>
+            </div>
+
+            {/* Product */}
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-gray-300 tracking-wider uppercase">Product</p>
+              <ul className="space-y-2.5">
+                {[
+                  { label: "Get Started", href: "/login" },
+                  { label: "View Demo", href: "#", onClick: true },
+                  { label: "PlayLab Games", href: "/dashboard/playlab" },
+                  { label: "Network Graph", href: "/dashboard/network" },
+                ].map((item) => (
+                  <li key={item.label}>
+                    <Link href={item.href} className="text-sm text-gray-500 hover:text-white transition-colors">
+                      {item.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Legal & Help */}
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-gray-300 tracking-wider uppercase">Legal & Help</p>
+              <ul className="space-y-2.5">
+                {[
+                  { label: "Privacy Policy", href: "/privacy" },
+                  { label: "Terms of Service", href: "/terms" },
+                  { label: "FAQ", href: "/faq" },
+                  { label: "Contact Support", href: "mailto:support@humanos.app" },
+                ].map((item) => (
+                  <li key={item.label}>
+                    <Link href={item.href} className="text-sm text-gray-500 hover:text-white transition-colors">
+                      {item.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* Bottom bar */}
+          <div className="pt-6 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p className="text-xs text-gray-600">
+              © {new Date().getFullYear()} HumanOS. All rights reserved.
+            </p>
+            <div className="flex items-center gap-4 text-xs text-gray-600">
+              <Link href="/privacy" className="hover:text-gray-400 transition-colors">Privacy</Link>
+              <Link href="/terms" className="hover:text-gray-400 transition-colors">Terms</Link>
+              <Link href="/faq" className="hover:text-gray-400 transition-colors">FAQ</Link>
+              <a href="mailto:support@humanos.app" className="hover:text-gray-400 transition-colors">support@humanos.app</a>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }
