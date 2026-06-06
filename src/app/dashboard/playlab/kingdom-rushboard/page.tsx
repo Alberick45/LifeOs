@@ -32,6 +32,7 @@ interface PlayerState {
     rewardItem?: string
     description: string
   }
+  reaction?: { emoji: string; id: string }
 }
 
 interface TileState {
@@ -95,6 +96,47 @@ const COMMENTATOR_LINES = {
   ]
 }
 
+const SNARKY_COMMENTARY = {
+  treasure: [
+    "Wowww! {player} found a chest! 🪙 Is that gold or just highly polished brass? Let's hope it's real!",
+    "Jackpot! {player} is rolling in the coins! 💰 Don't spend it all on cheap ale!",
+    "Oooooh, shiny! {player} looted a treasure vault! 👑 The tax man will be pleased.",
+    "Treasure chest opened! {player} gets a face full of gold dust! 🌟 Ka-ching!"
+  ],
+  trap: [
+    "OUCH! 💥 {player} triggered a trap! That's gotta hurt!",
+    "Boom! {player} stepped right on a mine. 🪤 Next time, look where you're walking, genius!",
+    "Direct hit! {player} got blasted! 🧨 Kaboom!",
+    "Oh, the tragedy! {player} is flying through the air! 🌪️ Stunned and confused!"
+  ],
+  snake: [
+    "Sssssssss! 🐍 A giant viper swallowed {player} and spat them out backward!",
+    "Down the tail! 🎢 {player} got slithered down a snake setback!",
+    "Oh, snake food! 🐍 {player} met the friendly neighborhood python. Down you go!",
+    "Sliding down! 🐍 Look at {player} go, sliding backward like a wet noodle!"
+  ],
+  rare_item: [
+    "No way! 💎 {player} grabbed a legendary {item}! Is that legal?!",
+    "Mythical drop! 🌟 {player} has a brand new shiny toy: {item}.",
+    "Luck levels off the charts! 💎 {player} found a {item}. Share some with us!"
+  ],
+  duel: [
+    "Duel time! ⚔️ {player} challenges {opponent}! Grab the popcorn!",
+    "Faceoff! ⚔️ Two explorers enter, one gets pushed back! Let's get ready to rumble!",
+    "Clash of the tokens! ⚔️ {player} and {opponent} are squaring up!"
+  ],
+  event: [
+    "Temporal rift! 🌀 The winds of chaos are blowing everyone forward!",
+    "Realm taxes! 💸 The king is taking his cut, pay up explorers!",
+    "Winds of chaos! 🌀 A massive coin boost for the underdog in last place! Rubberband mechanics active!"
+  ],
+  general: [
+    "Another day, another safe step. 👣 Booooring! We want explosions!",
+    "A slow, calculated step. 👣 Will it pay off? Or is a snake waiting in the dark?",
+    "Staying safe on tile {tile}... for now. 🧐"
+  ]
+}
+
 // Helper to layout winding path index to x, y coords in a 6-col grid
 const getTileCoords = (index: number) => {
   const cols = 6
@@ -121,6 +163,8 @@ export default function KingdomRushboardPage() {
   const [lobbyPlayers, setLobbyPlayers] = useState<any[]>([])
   const [myPresenceId, setMyPresenceId] = useState("")
   const [isReady, setIsReady] = useState(false)
+  const [localPlayerCount, setLocalPlayerCount] = useState(1)
+  const [localBotCount, setLocalBotCount] = useState(3)
 
   // Game Engine States
   const [board, setBoard] = useState<TileState[]>([])
@@ -130,6 +174,27 @@ export default function KingdomRushboardPage() {
   const [shakeScreen, setShakeScreen] = useState(false)
   const [placingTrap, setPlacingTrap] = useState(false)
   const [shoppingPlayerId, setShoppingPlayerId] = useState<string | null>(null)
+  const [eventOverlay, setEventOverlay] = useState<{
+    type: TileType | "EVENT"
+    playerName: string
+    playerEmoji: string
+    title: string
+    description: string
+    commentary: string
+    emoji: string
+    goldGain?: number
+    setbackPos?: number
+    stunned?: boolean
+    itemDropped?: string
+    consumedItem?: string
+    targetTileIndex?: number
+    eventSubtype?: "rift" | "taxes" | "underdog"
+  } | null>(null)
+  const [backpackRevealed, setBackpackRevealed] = useState(false)
+  const [myEmoji, setMyEmoji] = useState("🦁")
+  const [localPlayersSetup, setLocalPlayersSetup] = useState<{ name: string; emoji: string }[]>([
+    { name: "Player 1", emoji: "🦁" }
+  ])
 
   // Dice roll states
   const [isRolling, setIsRolling] = useState(false)
@@ -150,6 +215,94 @@ export default function KingdomRushboardPage() {
   const myPresenceIdRef = useRef("")
   const channelRef = useRef<any>(null)
   const logsEndRef = useRef<HTMLDivElement>(null)
+
+  const playersRef = useRef(players)
+  const currentPlayerIdxRef = useRef(currentPlayerIdx)
+  const boardRef = useRef(board)
+  const phaseRef = useRef(phase)
+
+  useEffect(() => { playersRef.current = players }, [players])
+  useEffect(() => { currentPlayerIdxRef.current = currentPlayerIdx }, [currentPlayerIdx])
+  useEffect(() => { boardRef.current = board }, [board])
+  useEffect(() => { phaseRef.current = phase }, [phase])
+
+  const isMyTurn = players[currentPlayerIdx] && !players[currentPlayerIdx].isBot && (roomCode ? players[currentPlayerIdx].id === "player" : true)
+
+  const isMyTurnToRoll = useCallback(() => {
+    const activePlayer = players[currentPlayerIdx]
+    if (!activePlayer) return false
+    if (activePlayer.isBot) return false
+    if (roomCode) {
+      return activePlayer.id === "player"
+    }
+    return true
+  }, [players, currentPlayerIdx, roomCode])
+
+  const getViewedPlayer = useCallback(() => {
+    if (roomCode) {
+      return players.find(p => p.id === "player") || players[0]
+    }
+    const active = players[currentPlayerIdx]
+    if (active && !active.isBot) {
+      return active
+    }
+    return players.find(p => !p.isBot) || players[0]
+  }, [players, currentPlayerIdx, roomCode])
+
+  const triggerReaction = (emoji: string) => {
+    const activePlayer = players[currentPlayerIdx]
+    if (!activePlayer) return
+    const myId = roomCode ? "player" : activePlayer.id
+    const reactionId = Math.random().toString()
+    
+    let updatedPlayers = playersRef.current.map(p => {
+      if (p.id === myId) {
+        return { ...p, reaction: { emoji, id: reactionId } }
+      }
+      return p
+    })
+    setPlayers(updatedPlayers)
+
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'game-event',
+        payload: { players: updatedPlayers }
+      })
+    }
+
+    setTimeout(() => {
+      setPlayers(prev => {
+        return prev.map(p => {
+          if (p.id === myId && p.reaction?.id === reactionId) {
+            const { reaction, ...rest } = p
+            return rest as PlayerState
+          }
+          return p
+        })
+      })
+    }, 2000)
+  }
+
+  const canRollDuelDie = () => {
+    if (phase !== "DUEL") return false
+    const challenger = players.find(p => p.id === duel.challengerId)
+    const defender = players.find(p => p.id === duel.defenderId)
+    if (!challenger || !defender) return false
+    
+    const challengerNeedsRoll = duel.challengerRoll === null
+    const defenderNeedsRoll = duel.defenderRoll === null
+    
+    if (roomCode) {
+      if (challengerNeedsRoll && challenger.id === "player") return true
+      if (defenderNeedsRoll && defender.id === "player") return true
+      return false
+    } else {
+      if (challengerNeedsRoll && !challenger.isBot) return true
+      if (defenderNeedsRoll && !defender.isBot) return true
+      return false
+    }
+  }
 
   // ─── AUDIO COMMENTATOR Synthesis ──────────────────────────────────────────
   const speak = useCallback((text: string) => {
@@ -179,6 +332,47 @@ export default function KingdomRushboardPage() {
       logsEndRef.current.scrollIntoView({ behavior: "smooth" })
     }
   }, [logs])
+
+  useEffect(() => {
+    if (!eventOverlay) return
+
+    const activePlayer = players[currentPlayerIdx]
+    if (!activePlayer) return
+
+    const isBot = activePlayer.isBot
+    const isHostOrLocal = !roomCode || isLobbyHost
+
+    if (isBot && isHostOrLocal) {
+      const timer = setTimeout(() => {
+        confirmEventOverlay(eventOverlay)
+      }, 3800)
+      return () => clearTimeout(timer)
+    }
+  }, [eventOverlay, currentPlayerIdx, players, roomCode, isLobbyHost])
+
+  useEffect(() => {
+    setBackpackRevealed(false)
+  }, [currentPlayerIdx])
+
+  useEffect(() => {
+    setLocalPlayersSetup(prev => {
+      const next = [...prev]
+      if (next.length < localPlayerCount) {
+        for (let i = next.length; i < localPlayerCount; i++) {
+          next.push({
+            name: `Player ${i + 1}`,
+            emoji: EMOJIS[i % EMOJIS.length]
+          })
+        }
+      } else if (next.length > localPlayerCount) {
+        next.splice(localPlayerCount)
+      }
+      if (next[0] && username) {
+        next[0].name = username
+      }
+      return next
+    })
+  }, [localPlayerCount, username])
 
   // ─── INIT PROFILE & COINS ──────────────────────────────────────────────────
   useEffect(() => {
@@ -318,6 +512,7 @@ export default function KingdomRushboardPage() {
           mapped.push({
             presenceId: pres[0].presenceId || key,
             name: pres[0].name || "Explorer",
+            emoji: pres[0].emoji || "🦁",
             isHost: pres[0].isHost || false,
             isReady: pres[0].isReady || false
           })
@@ -352,11 +547,14 @@ export default function KingdomRushboardPage() {
       if (payload.logs) {
         payload.logs.forEach((l: any) => {
           setLogs(prev => [...prev, { id: `${Date.now()}-${Math.random()}`, sender: l.sender, message: l.message, type: l.type }])
-          speak(l.message)
+          if (l.type === "commentator" || l.type === "danger" || l.type === "rare") {
+            speak(l.message)
+          }
         })
       }
       if (payload.duel) setDuel(payload.duel)
       if (payload.phase) setPhase(payload.phase)
+      if (payload.eventOverlay !== undefined) setEventOverlay(payload.eventOverlay)
     })
 
     channel.subscribe(async (status) => {
@@ -364,6 +562,7 @@ export default function KingdomRushboardPage() {
         await channel.track({
           presenceId: myPresId,
           name: username,
+          emoji: myEmoji,
           isHost: amHost,
           isReady: false
         })
@@ -380,6 +579,7 @@ export default function KingdomRushboardPage() {
       channelRef.current.track({
         presenceId: myPresenceIdRef.current,
         name: username,
+        emoji: myEmoji,
         isHost: isLobbyHost,
         isReady: nextReady
       })
@@ -393,7 +593,7 @@ export default function KingdomRushboardPage() {
     const playersList: PlayerState[] = lobbyPlayers.map((lp, idx) => ({
       id: lp.presenceId,
       name: lp.name,
-      emoji: EMOJIS[idx % EMOJIS.length],
+      emoji: lp.emoji || EMOJIS[idx % EMOJIS.length],
       isBot: false,
       tileIndex: 0,
       coins: 100,
@@ -406,9 +606,63 @@ export default function KingdomRushboardPage() {
       activeQuest: generateQuest()
     }))
 
-    // Fill with bots up to 4 players
+    // Fill with bots up to 4 players ONLY if there is only 1 player in the lobby!
+    if (playersList.length === 1) {
+      const botNames = ["Sir Alistair (Bot)", "Lady Vanessa (Bot)", "King Richard (Bot)", "Dwarf Grom (Bot)"]
+      while (playersList.length < 4) {
+        const bIdx = playersList.length
+        playersList.push({
+          id: `bot-${bIdx}`,
+          name: botNames[bIdx % botNames.length],
+          emoji: EMOJIS[bIdx % EMOJIS.length],
+          isBot: true,
+          tileIndex: 0,
+          coins: 100,
+          inventory: ["Trap Shield"],
+          shieldActive: false,
+          snakeImmunity: false,
+          duelBonus: false,
+          color: COLORS[bIdx % COLORS.length],
+          jailTurns: 0,
+          activeQuest: generateQuest()
+        })
+      }
+    }
+
+    channelRef.current.send({
+      type: 'broadcast',
+      event: 'start-match',
+      payload: { playersList, boardInit: initialBoard }
+    })
+  }
+
+  const startLocalGame = () => {
+    const initialBoard = generateBoard()
+    const playersList: PlayerState[] = []
+
+    // Add local human players
+    for (let i = 0; i < localPlayerCount; i++) {
+      const setup = localPlayersSetup[i] || { name: i === 0 ? username : `Player ${i + 1}`, emoji: EMOJIS[i % EMOJIS.length] }
+      playersList.push({
+        id: `player-${i}`,
+        name: setup.name || `Player ${i + 1}`,
+        emoji: setup.emoji || EMOJIS[i % EMOJIS.length],
+        isBot: false,
+        tileIndex: 0,
+        coins: 100,
+        inventory: ["Trap Shield"],
+        shieldActive: false,
+        snakeImmunity: false,
+        duelBonus: false,
+        color: COLORS[i % COLORS.length],
+        jailTurns: 0,
+        activeQuest: generateQuest()
+      })
+    }
+
+    // Add AI bots
     const botNames = ["Sir Alistair (Bot)", "Lady Vanessa (Bot)", "King Richard (Bot)", "Dwarf Grom (Bot)"]
-    while (playersList.length < 4) {
+    for (let i = 0; i < localBotCount; i++) {
       const bIdx = playersList.length
       playersList.push({
         id: `bot-${bIdx}`,
@@ -427,17 +681,20 @@ export default function KingdomRushboardPage() {
       })
     }
 
-    channelRef.current.send({
-      type: 'broadcast',
-      event: 'start-match',
-      payload: { playersList, boardInit: initialBoard }
-    })
+    setRoomCode("") // clear online code
+    setPlayers(playersList)
+    setBoard(initialBoard)
+    setPhase("PLAYING")
+    setCurrentPlayerIdx(0)
+    setLogs([])
+    pushLog("🏰 Local pass-and-play match initialized! Take turns in order.", "system")
+    pushLog("🎙️ Announcer Commentator loaded. Visual Board activated.", "commentator")
   }
 
   // ─── PLAYING TURNS & BOT TURNS ─────────────────────────────────────────────
-  const advanceTurn = (currentList: PlayerState[]) => {
+  const advanceTurn = (currentList: PlayerState[], activeIdx: number) => {
     setDiceRoll(null)
-    const nextIdx = (currentPlayerIdx + 1) % currentList.length
+    const nextIdx = (activeIdx + 1) % currentList.length
     const nextPlayer = currentList[nextIdx]
 
     if (nextPlayer.jailTurns > 0) {
@@ -449,13 +706,14 @@ export default function KingdomRushboardPage() {
       })
       pushLog(`⏳ ${nextPlayer.name} is stunned/skipping turn! (${nextPlayer.jailTurns} turns remaining)`, "danger")
       syncGameState(updated, nextIdx)
-      setTimeout(() => advanceTurn(updated), 1500)
+      setTimeout(() => advanceTurn(updated, nextIdx), 1500)
       return
     }
 
-    if (nextPlayer.isBot) {
+    const isHostOrLocal = !roomCode || isLobbyHost
+    if (nextPlayer.isBot && isHostOrLocal) {
       syncGameState(currentList, nextIdx)
-      setTimeout(() => executeBotTurn(nextIdx, currentList), 2000)
+      setTimeout(() => executeBotTurn(nextIdx), 2000)
     } else {
       syncGameState(currentList, nextIdx)
     }
@@ -476,48 +734,34 @@ export default function KingdomRushboardPage() {
       setDiceDisplayValue(rollResult)
       setDiceRoll(rollResult)
       setIsRolling(false)
-      pushLog(`🎲 ${players[currentPlayerIdx]?.name} rolled a ${rollResult}! Choose a tile to move to.`, "system")
+      const currentList = playersRef.current
+      const activeIdx = currentPlayerIdxRef.current
+      pushLog(`🎲 ${currentList[activeIdx]?.name} rolled a ${rollResult}! Choose a tile to move to.`, "system")
     }, 1200)
   }
 
   // ─── HAZARD RESOLUTIONS (TRAP, SNAKE, DUELS, TREASURE) ──────────────────────
-  const resolveTileTrigger = (
-    playerIdx: number,
-    targetTileIndex: number,
-    currentList: PlayerState[],
-    currentBoard: TileState[]
-  ) => {
-    const player = currentList[playerIdx]
-    const tile = currentBoard[targetTileIndex]
-    let updatedPlayers = [...currentList]
-    let updatedBoard = [...currentBoard]
+  // ─── HAZARD RESOLUTIONS (TRAP, SNAKE, DUELS, TREASURE) ──────────────────────
+  const confirmEventOverlay = (overlay: typeof eventOverlay) => {
+    if (!overlay) return
+
+    const activePlayer = players[currentPlayerIdx]
+    const isBotTurn = activePlayer?.isBot
+    const isMyTurnToResolve = roomCode ? (isBotTurn ? isLobbyHost : activePlayer.id === "player") : true
+    if (!isMyTurnToResolve) return
+
+    let updatedPlayers = [...players]
+    let updatedBoard = [...board]
     let logMsg = ""
     let logsType: ChatLog["type"] = "system"
 
-    // Mark tile as permanently revealed
-    updatedBoard[targetTileIndex] = { ...tile, revealed: true }
+    const playerIdx = currentPlayerIdx
+    const player = players[playerIdx]
+    if (!player) return
 
-    // Quest progression for exploration
-    if (player.activeQuest.type === "explore") {
-      const wasRevealed = tile.revealed
-      if (!wasRevealed) {
-        updatedPlayers = updatedPlayers.map((p, idx) => {
-          if (idx === playerIdx) {
-            const nextProgress = p.activeQuest.progress + 1
-            return {
-              ...p,
-              activeQuest: { ...p.activeQuest, progress: nextProgress }
-            }
-          }
-          return p
-        })
-      }
-    }
-
-    // Resolve specific tile contents
-    switch (tile.type) {
-      case "TREASURE":
-        const goldGain = Math.floor(Math.random() * 30) + 30
+    switch (overlay.type) {
+      case "TREASURE": {
+        const goldGain = overlay.goldGain || 0
         updatedPlayers = updatedPlayers.map((p, idx) => {
           if (idx === playerIdx) {
             let nextCoins = p.coins + goldGain
@@ -531,10 +775,10 @@ export default function KingdomRushboardPage() {
         })
         logMsg = `💰 Treasure! ${player.name} retrieved an ancient vault (+${goldGain} Coins).`
         break
+      }
 
-      case "TRAP":
-        // Check shield protection
-        if (player.shieldActive) {
+      case "TRAP": {
+        if (overlay.consumedItem) {
           updatedPlayers = updatedPlayers.map((p, idx) => {
             if (idx === playerIdx) {
               return { ...p, shieldActive: false }
@@ -543,31 +787,25 @@ export default function KingdomRushboardPage() {
           })
           logMsg = `🛡️ Trap Shield absorbed the dangerous blast for ${player.name}!`
         } else {
-          // Trigger actual trap
-          const lines = COMMENTATOR_LINES.trap
-          const quote = lines[Math.floor(Math.random() * lines.length)]
-          
-          // Trap outcome: lost turn or move back 2 spaces
-          const trapOutcome = Math.random() < 0.5 ? "back" : "stun"
-          if (trapOutcome === "back") {
-            const backIndex = Math.max(0, targetTileIndex - 2)
+          if (overlay.setbackPos !== undefined) {
+            const backIndex = overlay.setbackPos
             updatedPlayers = updatedPlayers.map((p, idx) => {
               if (idx === playerIdx) {
                 return { ...p, tileIndex: backIndex }
               }
               return p
             })
-            logMsg = `🧨 ${quote} ${player.name} was blasted backward to tile ${backIndex}.`
-          } else {
+            logMsg = `🧨 Trap! ${player.name} was blasted backward to tile ${backIndex}.`
+          } else if (overlay.stunned) {
             updatedPlayers = updatedPlayers.map((p, idx) => {
               if (idx === playerIdx) {
                 return { ...p, jailTurns: 1 }
               }
               return p
             })
-            logMsg = `🧨 ${quote} ${player.name} was stunned and loses their next turn!`
+            logMsg = `🧨 Trap! ${player.name} was stunned and loses their next turn!`
+            logsType = "danger"
           }
-          logsType = "danger"
 
           // Update Quest progress for trap survived
           updatedPlayers = updatedPlayers.map((p, idx) => {
@@ -580,9 +818,10 @@ export default function KingdomRushboardPage() {
         setShakeScreen(true)
         setTimeout(() => setShakeScreen(false), 500)
         break
+      }
 
-      case "SNAKE":
-        if (player.snakeImmunity || player.shieldActive) {
+      case "SNAKE": {
+        if (overlay.consumedItem) {
           updatedPlayers = updatedPlayers.map((p, idx) => {
             if (idx === playerIdx) {
               return { ...p, shieldActive: false, snakeImmunity: false }
@@ -591,16 +830,14 @@ export default function KingdomRushboardPage() {
           })
           logMsg = `🛡️ ${player.name} bypassed the giant viper thanks to their protective items!`
         } else {
-          const lines = COMMENTATOR_LINES.snake
-          const quote = lines[Math.floor(Math.random() * lines.length)]
-          const targetIndex = Math.max(0, targetTileIndex - 5)
+          const targetIndex = overlay.setbackPos ?? player.tileIndex
           updatedPlayers = updatedPlayers.map((p, idx) => {
             if (idx === playerIdx) {
               return { ...p, tileIndex: targetIndex }
             }
             return p
           })
-          logMsg = `🐍 ${quote} ${player.name} slid all the way back to tile ${targetIndex}.`
+          logMsg = `🐍 Snake! ${player.name} slid all the way back to tile ${targetIndex}.`
           logsType = "danger"
 
           // Update Quest progress
@@ -612,10 +849,10 @@ export default function KingdomRushboardPage() {
           })
         }
         break
+      }
 
-      case "RARE_ITEM":
-        const rarePool = ["Foresight Eye", "Warp Scroll", "Immunity Shield", "Duel Crest", "Snake Charm"]
-        const droppedItem = rarePool[Math.floor(Math.random() * rarePool.length)]
+      case "RARE_ITEM": {
+        const droppedItem = overlay.itemDropped || ""
         updatedPlayers = updatedPlayers.map((p, idx) => {
           if (idx === playerIdx) {
             return { ...p, inventory: [...p.inventory, droppedItem] }
@@ -625,52 +862,22 @@ export default function KingdomRushboardPage() {
         logMsg = `💎 Rare drop! ${player.name} uncovered a mythical [${droppedItem}]!`
         logsType = "rare"
         break
+      }
 
-      case "MARKETPLACE":
-        logMsg = `🛒 ${player.name} entered the mystical merchant Marketplace!`
-        if (!player.isBot) {
-          setShoppingPlayerId(player.id)
-        } else {
-          // Bot Marketplace purchases logic
-          if (player.coins >= 80) {
-            updatedPlayers = updatedPlayers.map((p, idx) => {
-              if (idx === playerIdx) {
-                return { ...p, coins: p.coins - 80, inventory: [...p.inventory, "Trap Shield"] }
-              }
-              return p
-            })
-            logMsg += ` Bot purchased a [Trap Shield] for 80 coins.`
-          }
-        }
-        break
-
-      case "QUEST":
-        const questGift = Math.floor(Math.random() * 20) + 15
-        updatedPlayers = updatedPlayers.map((p, idx) => {
-          if (idx === playerIdx) {
-            return { ...p, coins: p.coins + questGift }
-          }
-          return p
-        })
-        logMsg = `🧭 Quest shrine! ${player.name} received a coin boon (+${questGift} Coins).`
-        break
-
-      case "EVENT":
-        const eventId = Math.floor(Math.random() * 3)
-        if (eventId === 0) {
+      case "EVENT": {
+        if (overlay.eventSubtype === "rift") {
           logMsg = `🌀 Event: Temporal Rift! Everyone receives a teleportation gift (+1 tile forward).`
           updatedPlayers = updatedPlayers.map(p => ({
             ...p,
             tileIndex: Math.min(30, p.tileIndex + 1)
           }))
-        } else if (eventId === 1) {
+        } else if (overlay.eventSubtype === "taxes") {
           logMsg = `🌀 Event: Taxes of the Realm! Everyone loses 15 coins to the vault.`
           updatedPlayers = updatedPlayers.map(p => ({
             ...p,
             coins: Math.max(0, p.coins - 15)
           }))
-        } else {
-          logMsg = `🌀 Event: Winds of Chaos! The player in last place receives a coin bounty (+40 coins).`
+        } else if (overlay.eventSubtype === "underdog") {
           let lastPlayerIdx = 0
           let minTiles = 99
           updatedPlayers.forEach((p, idx) => {
@@ -679,6 +886,8 @@ export default function KingdomRushboardPage() {
               lastPlayerIdx = idx
             }
           })
+          const lastPlayerName = updatedPlayers[lastPlayerIdx]?.name || "Explorer"
+          logMsg = `🌀 Event: Winds of Chaos! The player in last place (${lastPlayerName}) receives a coin bounty (+40 coins).`
           updatedPlayers = updatedPlayers.map((p, idx) => {
             if (idx === lastPlayerIdx) {
               return { ...p, coins: p.coins + 40 }
@@ -687,61 +896,33 @@ export default function KingdomRushboardPage() {
           })
         }
         break
-
-      default:
-        logMsg = `👣 ${player.name} stopped safely on tile ${targetTileIndex}.`
-        break
+      }
     }
 
-    // Check placed traps on this tile
-    if (tile.placedTrapBy && tile.placedTrapBy !== player.id) {
-      if (player.shieldActive) {
+    // Quest progression for exploration
+    if (player.activeQuest.type === "explore" && overlay.targetTileIndex !== undefined) {
+      const tile = board[overlay.targetTileIndex]
+      if (tile && !tile.revealed) {
         updatedPlayers = updatedPlayers.map((p, idx) => {
           if (idx === playerIdx) {
-            return { ...p, shieldActive: false }
+            return {
+              ...p,
+              activeQuest: { ...p.activeQuest, progress: p.activeQuest.progress + 1 }
+            }
           }
           return p
         })
-        logMsg += ` The shield blocked a player-laid trap!`
-      } else {
-        const victimIndex = Math.max(0, targetTileIndex - 3)
-        updatedPlayers = updatedPlayers.map((p, idx) => {
-          if (idx === playerIdx) {
-            return { ...p, tileIndex: victimIndex }
-          }
-          return p
-        })
-        logMsg += ` Stumbled on a custom trap laid by an opponent! Blasted back to tile ${victimIndex}.`
       }
-      // Remove custom trap after trigger
-      updatedBoard[targetTileIndex] = { ...tile, placedTrapBy: undefined }
     }
 
-    // Check for Duels (forced duel if landing on same tile as another player)
-    const occupants = updatedPlayers.filter((p, idx) => idx !== playerIdx && p.tileIndex === targetTileIndex && targetTileIndex > 0 && targetTileIndex < 30)
-    if (occupants.length > 0 && phase !== "DUEL") {
-      const opponent = occupants[0]
-      const duelLines = COMMENTATOR_LINES.duel
-      const duelQuote = duelLines[Math.floor(Math.random() * duelLines.length)]
-      
-      const newLogs = [
-        { sender: "📢 Announcer", message: logMsg, type: logsType },
-        { sender: "🎙️ Commentator", message: `⚔️ ${duelQuote} Duel triggered between ${player.name} and ${opponent.name}!`, type: "danger" }
-      ]
-
-      const nextDuel: DuelState = {
-        active: true,
-        challengerId: player.id,
-        defenderId: opponent.id,
-        challengerRoll: null,
-        defenderRoll: null,
-        logs: [`Challenger: ${player.name} • Defender: ${opponent.name}`]
-      }
-
-      setDuel(nextDuel)
-      setPhase("DUEL")
-      syncGameState(updatedPlayers, playerIdx, newLogs, updatedBoard, { duel: nextDuel, phase: "DUEL" })
-      return
+    // Reveal tile permanently on board
+    if (overlay.targetTileIndex !== undefined) {
+      updatedBoard = updatedBoard.map((t, idx) => {
+        if (idx === overlay.targetTileIndex) {
+          return { ...t, revealed: true }
+        }
+        return t
+      })
     }
 
     // Quest completion check
@@ -764,32 +945,359 @@ export default function KingdomRushboardPage() {
     })
 
     // Check Victory
-    if (targetTileIndex === 30) {
+    if (overlay.targetTileIndex === 30) {
       const winLines = COMMENTATOR_LINES.win
       const winQuote = winLines[Math.floor(Math.random() * winLines.length)]
       const victoryLogs = [
-        { sender: "📢 Announcer", message: logMsg, type: "system" },
-        { sender: "🎙️ Commentator", message: `👑 ${winQuote} ${player.name} reaches the Throne!`, type: "hype" }
+        { sender: "📢 Announcer", message: logMsg, type: "system" as const },
+        { sender: "🎙️ Commentator", message: `👑 ${winQuote} ${player.name} reaches the Throne!`, type: "commentator" as const }
       ]
       setPhase("RESULTS")
-      syncGameState(updatedPlayers, playerIdx, victoryLogs, updatedBoard, { phase: "RESULTS" })
-      
-      if (player.id === "player") {
-        adjustCoins(userId, 40) // +40 global account coins
+      setEventOverlay(null)
+      syncGameState(updatedPlayers, playerIdx, victoryLogs, updatedBoard, { phase: "RESULTS", eventOverlay: null })
+      if (player.id === "player" || player.id === "player-0") {
+        adjustCoins(userId, 40)
       }
       return
     }
 
-    // Sync and proceed to next turn
-    syncGameState(updatedPlayers, playerIdx, [{ sender: "📢 Announcer", message: logMsg, type: logsType }], updatedBoard)
-    advanceTurn(updatedPlayers)
+    setEventOverlay(null)
+    syncGameState(updatedPlayers, playerIdx, [{ sender: "📢 Announcer", message: logMsg, type: logsType }], updatedBoard, { eventOverlay: null })
+    advanceTurn(updatedPlayers, playerIdx)
+  }
+
+  const resolveTileTrigger = (
+    playerIdx: number,
+    targetTileIndex: number,
+    currentList: PlayerState[],
+    currentBoard: TileState[]
+  ) => {
+    const player = currentList[playerIdx]
+    const tile = currentBoard[targetTileIndex]
+    if (!player || !tile) return
+
+    let updatedPlayers = [...currentList]
+    let updatedBoard = [...currentBoard]
+
+    // Check placed traps (opponent traps) first
+    if (tile.placedTrapBy && tile.placedTrapBy !== player.id) {
+      const hasShield = player.shieldActive
+      const setbackPos = hasShield ? undefined : Math.max(0, targetTileIndex - 3)
+      const quoteArr = SNARKY_COMMENTARY.trap
+      const quote = quoteArr[Math.floor(Math.random() * quoteArr.length)].replace("{player}", player.name)
+
+      const overlayData = {
+        type: "TRAP" as const,
+        playerName: player.name,
+        playerEmoji: player.emoji,
+        title: hasShield ? "Trap Shield Absorbed! 🛡️" : "Custom Trap Sprung! 🧨",
+        description: hasShield
+          ? "Your Trap Shield fully absorbed the opponent's custom mine."
+          : `You stumbled on an opponent's hidden trap and got blasted back to tile ${setbackPos}!`,
+        commentary: quote,
+        emoji: hasShield ? "🛡️" : "🧨",
+        consumedItem: hasShield ? "Trap Shield" : undefined,
+        setbackPos,
+        targetTileIndex
+      }
+
+      setEventOverlay(overlayData)
+      const nextBoard = currentBoard.map(t => t.index === targetTileIndex ? { ...t, placedTrapBy: undefined, revealed: true } : t)
+      setBoard(nextBoard)
+      syncGameState(currentList, playerIdx, [], nextBoard, { eventOverlay: overlayData })
+      pushLog(`🎙️ Commentator: ${quote}`, "commentator")
+      return
+    }
+
+    // Resolve specific tile contents
+    switch (tile.type) {
+      case "TREASURE": {
+        const goldGain = Math.floor(Math.random() * 30) + 30
+        const quoteArr = SNARKY_COMMENTARY.treasure
+        const quote = quoteArr[Math.floor(Math.random() * quoteArr.length)].replace("{player}", player.name)
+
+        const overlayData = {
+          type: "TREASURE" as const,
+          playerName: player.name,
+          playerEmoji: player.emoji,
+          title: "Treasure Opened! 💰",
+          description: `You found a lost chest containing +${goldGain} Gold Coins!`,
+          commentary: quote,
+          emoji: "🪙",
+          goldGain,
+          targetTileIndex
+        }
+
+        setEventOverlay(overlayData)
+        const nextBoard = currentBoard.map(t => t.index === targetTileIndex ? { ...t, revealed: true } : t)
+        setBoard(nextBoard)
+        syncGameState(currentList, playerIdx, [], nextBoard, { eventOverlay: overlayData })
+        pushLog(`🎙️ Commentator: ${quote}`, "commentator")
+        break
+      }
+
+      case "TRAP": {
+        const hasShield = player.shieldActive
+        const trapOutcome = Math.random() < 0.5 ? "back" : "stun"
+        const setbackPos = hasShield ? undefined : (trapOutcome === "back" ? Math.max(0, targetTileIndex - 2) : undefined)
+        const stunned = hasShield ? undefined : (trapOutcome === "stun" ? true : undefined)
+        const quoteArr = SNARKY_COMMENTARY.trap
+        const quote = quoteArr[Math.floor(Math.random() * quoteArr.length)].replace("{player}", player.name)
+
+        const overlayData = {
+          type: "TRAP" as const,
+          playerName: player.name,
+          playerEmoji: player.emoji,
+          title: hasShield ? "Trap Shield Absorbed! 🛡️" : "Trap Sprung! 🪤",
+          description: hasShield
+            ? "Your Trap Shield fully absorbed the explosive damage!"
+            : (trapOutcome === "back" ? `Blasted backward 2 spaces to tile ${setbackPos}!` : "Stunned! You lose your next turn."),
+          commentary: quote,
+          emoji: hasShield ? "🛡️" : (trapOutcome === "back" ? "💥" : "🤕"),
+          consumedItem: hasShield ? "Trap Shield" : undefined,
+          setbackPos,
+          stunned,
+          targetTileIndex
+        }
+
+        setEventOverlay(overlayData)
+        const nextBoard = currentBoard.map(t => t.index === targetTileIndex ? { ...t, revealed: true } : t)
+        setBoard(nextBoard)
+        syncGameState(currentList, playerIdx, [], nextBoard, { eventOverlay: overlayData })
+        pushLog(`🎙️ Commentator: ${quote}`, "commentator")
+        break
+      }
+
+      case "SNAKE": {
+        const hasImmunity = player.snakeImmunity || player.shieldActive
+        const setbackPos = hasImmunity ? undefined : Math.max(0, targetTileIndex - 5)
+        const quoteArr = SNARKY_COMMENTARY.snake
+        const quote = quoteArr[Math.floor(Math.random() * quoteArr.length)].replace("{player}", player.name)
+
+        const overlayData = {
+          type: "SNAKE" as const,
+          playerName: player.name,
+          playerEmoji: player.emoji,
+          title: hasImmunity ? "Snake Deflected! 🧿" : "Snake Attack! 🐍",
+          description: hasImmunity
+            ? "Your snake immunity charm or shield protected you from sliding down!"
+            : `Coiled and dragged backward 5 spaces to tile ${setbackPos}!`,
+          commentary: quote,
+          emoji: hasImmunity ? "🧿" : "🐍",
+          consumedItem: hasImmunity ? "Charm" : undefined,
+          setbackPos,
+          targetTileIndex
+        }
+
+        setEventOverlay(overlayData)
+        const nextBoard = currentBoard.map(t => t.index === targetTileIndex ? { ...t, revealed: true } : t)
+        setBoard(nextBoard)
+        syncGameState(currentList, playerIdx, [], nextBoard, { eventOverlay: overlayData })
+        pushLog(`🎙️ Commentator: ${quote}`, "commentator")
+        break
+      }
+
+      case "RARE_ITEM": {
+        const rarePool = ["Foresight Eye", "Warp Scroll", "Immunity Shield", "Duel Crest", "Snake Charm"]
+        const droppedItem = rarePool[Math.floor(Math.random() * rarePool.length)]
+        const quoteArr = SNARKY_COMMENTARY.rare_item
+        const quote = quoteArr[Math.floor(Math.random() * quoteArr.length)].replace("{player}", player.name).replace("{item}", droppedItem)
+
+        const overlayData = {
+          type: "RARE_ITEM" as const,
+          playerName: player.name,
+          playerEmoji: player.emoji,
+          title: "Rare Drop Discovered! 💎",
+          description: `You retrieved a mythical artifact: [${droppedItem}]`,
+          commentary: quote,
+          emoji: "🎁",
+          itemDropped: droppedItem,
+          targetTileIndex
+        }
+
+        setEventOverlay(overlayData)
+        const nextBoard = currentBoard.map(t => t.index === targetTileIndex ? { ...t, revealed: true } : t)
+        setBoard(nextBoard)
+        syncGameState(currentList, playerIdx, [], nextBoard, { eventOverlay: overlayData })
+        pushLog(`🎙️ Commentator: ${quote}`, "commentator")
+        break
+      }
+
+      case "EVENT": {
+        const eventId = Math.floor(Math.random() * 3)
+        let eventSubtype: "rift" | "taxes" | "underdog" = "rift"
+        let title = "Temporal Rift! 🌀"
+        let description = "Everyone receives a teleportation gift (+1 tile forward)."
+        let quote = SNARKY_COMMENTARY.event[0]
+
+        if (eventId === 1) {
+          eventSubtype = "taxes"
+          title = "Realm Taxes! 💸"
+          description = "Everyone loses 15 coins to the sovereign vaults."
+          quote = SNARKY_COMMENTARY.event[1]
+        } else if (eventId === 2) {
+          eventSubtype = "underdog"
+          title = "Winds of Chaos! 🌀"
+          let lastPlayerIdx = 0
+          let minTiles = 99
+          currentList.forEach((p, idx) => {
+            if (p.tileIndex < minTiles) {
+              minTiles = p.tileIndex
+              lastPlayerIdx = idx
+            }
+          })
+          const lastPlayerName = currentList[lastPlayerIdx]?.name || "Explorer"
+          description = `The player in last place (${lastPlayerName}) receives a coin bounty (+40 coins).`
+          quote = SNARKY_COMMENTARY.event[2].replace("{player}", lastPlayerName)
+        }
+
+        const overlayData = {
+          type: "EVENT" as const,
+          playerName: player.name,
+          playerEmoji: player.emoji,
+          title,
+          description,
+          commentary: quote,
+          emoji: eventId === 1 ? "💸" : "🌀",
+          eventSubtype,
+          targetTileIndex
+        }
+
+        setEventOverlay(overlayData)
+        const nextBoard = currentBoard.map(t => t.index === targetTileIndex ? { ...t, revealed: true } : t)
+        setBoard(nextBoard)
+        syncGameState(currentList, playerIdx, [], nextBoard, { eventOverlay: overlayData })
+        pushLog(`🎙️ Commentator: ${quote}`, "commentator")
+        break
+      }
+
+      default: {
+        // Mark tile revealed
+        updatedBoard[targetTileIndex] = { ...tile, revealed: true }
+
+        // Quest progression for exploration
+        if (player.activeQuest.type === "explore") {
+          const wasRevealed = tile.revealed
+          if (!wasRevealed) {
+            updatedPlayers = updatedPlayers.map((p, idx) => {
+              if (idx === playerIdx) {
+                const nextProgress = p.activeQuest.progress + 1
+                return {
+                  ...p,
+                  activeQuest: { ...p.activeQuest, progress: nextProgress }
+                }
+              }
+              return p
+            })
+          }
+        }
+
+        let logMsg = ""
+        let logsType: ChatLog["type"] = "system"
+
+        if (tile.type === "MARKETPLACE") {
+          logMsg = `🛒 ${player.name} entered the mystical merchant Marketplace!`
+          if (!player.isBot) {
+            setShoppingPlayerId(player.id)
+          } else {
+            if (player.coins >= 80) {
+              updatedPlayers = updatedPlayers.map((p, idx) => {
+                if (idx === playerIdx) {
+                  return { ...p, coins: p.coins - 80, inventory: [...p.inventory, "Trap Shield"] }
+                }
+                return p
+              })
+              logMsg += ` Bot purchased a [Trap Shield] for 80 coins.`
+            }
+          }
+        } else if (tile.type === "QUEST") {
+          const questGift = Math.floor(Math.random() * 20) + 15
+          updatedPlayers = updatedPlayers.map((p, idx) => {
+            if (idx === playerIdx) {
+              return { ...p, coins: p.coins + questGift }
+            }
+            return p
+          })
+          logMsg = `🧭 Quest shrine! ${player.name} received a coin boon (+${questGift} Coins).`
+        } else {
+          logMsg = `👣 ${player.name} stopped safely on tile ${targetTileIndex}.`
+        }
+
+        // Check for Duels
+        const occupants = updatedPlayers.filter((p, idx) => idx !== playerIdx && p.tileIndex === targetTileIndex && targetTileIndex > 0 && targetTileIndex < 30)
+        if (occupants.length > 0 && phase !== "DUEL") {
+          const opponent = occupants[0]
+          const duelLines = COMMENTATOR_LINES.duel
+          const duelQuote = duelLines[Math.floor(Math.random() * duelLines.length)]
+
+          const newLogs = [
+            { sender: "📢 Announcer", message: logMsg, type: "system" as const },
+            { sender: "🎙️ Commentator", message: `⚔️ ${duelQuote} Duel triggered between ${player.name} and ${opponent.name}!`, type: "danger" as const }
+          ]
+
+          const nextDuel: DuelState = {
+            active: true,
+            challengerId: player.id,
+            defenderId: opponent.id,
+            challengerRoll: null,
+            defenderRoll: null,
+            logs: [`Challenger: ${player.name} • Defender: ${opponent.name}`]
+          }
+
+          setDuel(nextDuel)
+          setPhase("DUEL")
+          syncGameState(updatedPlayers, playerIdx, newLogs, updatedBoard, { duel: nextDuel, phase: "DUEL" })
+          return
+        }
+
+        // Quest completion check
+        updatedPlayers = updatedPlayers.map((p, idx) => {
+          if (idx === playerIdx && p.activeQuest.progress >= p.activeQuest.target) {
+            const giftCoins = p.activeQuest.rewardCoins
+            let updatedInv = [...p.inventory]
+            if (p.activeQuest.rewardItem) {
+              updatedInv.push(p.activeQuest.rewardItem)
+            }
+            pushLog(`🧭 Quest Completed! ${p.name} completed [${p.activeQuest.description}]! (+${giftCoins}c, +${p.activeQuest.rewardItem || ""})`, "rare")
+            return {
+              ...p,
+              coins: p.coins + giftCoins,
+              inventory: updatedInv,
+              activeQuest: generateQuest()
+            }
+          }
+          return p
+        })
+
+        // Check Victory
+        if (targetTileIndex === 30) {
+          const winLines = COMMENTATOR_LINES.win
+          const winQuote = winLines[Math.floor(Math.random() * winLines.length)]
+          const victoryLogs = [
+            { sender: "📢 Announcer", message: logMsg, type: "system" as const },
+            { sender: "🎙️ Commentator", message: `👑 ${winQuote} ${player.name} reaches the Throne!`, type: "hype" as const }
+          ]
+          setPhase("RESULTS")
+          syncGameState(updatedPlayers, playerIdx, victoryLogs, updatedBoard, { phase: "RESULTS" })
+          if (player.id === "player" || player.id === "player-0") {
+            adjustCoins(userId, 40)
+          }
+          return
+        }
+
+        // Sync and proceed to next turn
+        syncGameState(updatedPlayers, playerIdx, [{ sender: "📢 Announcer", message: logMsg, type: logsType }], updatedBoard)
+        advanceTurn(updatedPlayers, playerIdx)
+        break
+      }
+    }
   }
 
   // ─── PLAYER MOVE SUBMISSION (CLICK TILE) ───────────────────────────────────
   const movePlayerToTile = (targetTileIndex: number) => {
     if (diceRoll === null || phase !== "PLAYING") return
     const activePlayer = players[currentPlayerIdx]
-    if (activePlayer.id !== "player") return
+    if (roomCode && activePlayer.id !== "player") return
 
     // Execute move
     let updatedPlayers = players.map((p, idx) => {
@@ -803,9 +1311,11 @@ export default function KingdomRushboardPage() {
   }
 
   // ─── BOT MOVEMENT CHOICES ──────────────────────────────────────────────────
-  const executeBotTurn = (botIdx: number, currentList: PlayerState[]) => {
+  const executeBotTurn = (botIdx: number) => {
+    const currentList = playersRef.current
+    const currentBoard = boardRef.current
     const bot = currentList[botIdx]
-    if (!bot || phase !== "PLAYING") return
+    if (!bot || phaseRef.current !== "PLAYING") return
 
     // Roll movement
     const steps = Math.floor(Math.random() * 6) + 1
@@ -813,7 +1323,7 @@ export default function KingdomRushboardPage() {
     let pickedStep = steps
     for (let s = 1; s <= steps; s++) {
       const targetIndex = Math.min(30, bot.tileIndex + s)
-      const tile = board[targetIndex]
+      const tile = currentBoard[targetIndex]
       // Smart bot avoids known Traps/Snakes if possible
       if (tile.revealed && (tile.type === "TRAP" || tile.type === "SNAKE")) {
         continue
@@ -832,14 +1342,15 @@ export default function KingdomRushboardPage() {
     })
 
     setTimeout(() => {
-      resolveTileTrigger(botIdx, nextIndex, updatedPlayers, board)
+      resolveTileTrigger(botIdx, nextIndex, updatedPlayers, boardRef.current)
     }, 1200)
   }
 
   // ─── INVENTORY ITEM ACTIVATION ─────────────────────────────────────────────
   const useInventoryItem = (itemName: string) => {
     const activePlayer = players[currentPlayerIdx]
-    if (activePlayer.id !== "player" || phase !== "PLAYING") return
+    if (!activePlayer || phase !== "PLAYING") return
+    if (roomCode ? activePlayer.id !== "player" : activePlayer.isBot) return
 
     let nextInv = [...activePlayer.inventory]
     const idx = nextInv.indexOf(itemName)
@@ -1036,7 +1547,7 @@ export default function KingdomRushboardPage() {
       ], board, { phase: "PLAYING", duel: updatedDuel })
 
       // Proceed turn
-      advanceTurn(updatedPlayers)
+      advanceTurn(updatedPlayers, currentPlayerIdx)
     } else {
       // Prompt bot defender to roll automatically
       const defenderObj = players.find(p => p.id === duel.defenderId)!
@@ -1118,7 +1629,7 @@ export default function KingdomRushboardPage() {
         { sender: "📢 Announcer", message: `⚔️ Duel winner: ${winner.name}! Loser knocked back 3 spaces.`, type: "system" }
       ], board, { phase: "PLAYING", duel: updatedDuel })
 
-      advanceTurn(updatedPlayers)
+      advanceTurn(updatedPlayers, currentPlayerIdx)
     }
   }
 
@@ -1166,6 +1677,16 @@ export default function KingdomRushboardPage() {
 
   return (
     <div className={`space-y-6 max-w-6xl mx-auto pb-10 ${shakeScreen ? "animate-bounce" : ""}`}>
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes emoji-bubble {
+          0% { transform: translate(-50%, 0) scale(0.5); opacity: 0; }
+          15% { transform: translate(-50%, -10px) scale(1.15); opacity: 1; }
+          30% { transform: translate(-53%, -22px) rotate(-5deg) scale(1); }
+          50% { transform: translate(-47%, -35px) rotate(5deg) scale(1); }
+          70% { transform: translate(-52%, -48px) rotate(-3deg) scale(0.95); opacity: 0.9; }
+          100% { transform: translate(-50%, -65px) scale(0.8); opacity: 0; }
+        }
+      `}} />
       
       {/* Header Panel */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -1182,6 +1703,21 @@ export default function KingdomRushboardPage() {
         </div>
 
         <div className="flex items-center gap-3 bg-white/5 border border-white/10 px-4 py-2 rounded-2xl">
+          {phase === "PLAYING" && (
+            <div className="flex items-center gap-1.5">
+              {["😂", "😮", "🔥", "👏", "👎", "💀"].map(emoji => (
+                <button
+                  key={emoji}
+                  onClick={() => triggerReaction(emoji)}
+                  className="p-1 hover:bg-white/10 rounded-lg text-base transition-transform hover:scale-125 duration-150 active:scale-90"
+                  title={`React ${emoji}`}
+                >
+                  {emoji}
+                </button>
+              ))}
+              <div className="h-4 w-px bg-white/10 mx-1.5" />
+            </div>
+          )}
           <button onClick={() => setSoundMuted(!soundMuted)} className="p-1.5 hover:bg-white/5 rounded-lg text-gray-400 transition-colors">
             {soundMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
           </button>
@@ -1218,6 +1754,27 @@ export default function KingdomRushboardPage() {
                 />
               </div>
 
+              {/* Choose Avatar Emoji for Multiplayer/Host */}
+              <div className="space-y-2.5">
+                <label className="text-xs font-bold text-gray-400 uppercase">Choose Your Avatar Emoji</label>
+                <div className="flex gap-2 overflow-x-auto pb-1.5 custom-scrollbar">
+                  {EMOJIS.map(emoji => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => setMyEmoji(emoji)}
+                      className={`text-2xl p-2.5 rounded-xl border transition-all duration-200 ${
+                        myEmoji === emoji
+                          ? "border-orange-500 bg-orange-500/10 scale-110 text-white"
+                          : "border-white/5 bg-white/5 text-gray-400 hover:bg-white/10"
+                      }`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="border-t border-white/5 pt-4 flex gap-2">
                 <input
                   type="text"
@@ -1232,6 +1789,95 @@ export default function KingdomRushboardPage() {
                 </Button>
                 <Button onClick={hostLobby} className="bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-bold shadow-md shadow-orange-600/20">
                   Host Room
+                </Button>
+              </div>
+
+              <div className="border-t border-white/5 pt-4 space-y-4">
+                <h3 className="text-xs font-bold text-gray-400 uppercase">Local Play (Offline Pass & Play)</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-gray-500 uppercase">Local Human Players</label>
+                    <select
+                      value={localPlayerCount}
+                      onChange={e => setLocalPlayerCount(Number(e.target.value))}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500/50"
+                    >
+                      <option value={1}>1 Player</option>
+                      <option value={2}>2 Players</option>
+                      <option value={3}>3 Players</option>
+                      <option value={4}>4 Players</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-gray-500 uppercase">AI Bots</label>
+                    <select
+                      value={localBotCount}
+                      onChange={e => setLocalBotCount(Number(e.target.value))}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500/50"
+                    >
+                      <option value={0}>0 Bots</option>
+                      <option value={1}>1 Bot</option>
+                      <option value={2}>2 Bots</option>
+                      <option value={3}>3 Bots</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Local Human Customization Setup Cards */}
+                {localPlayerCount > 1 && (
+                  <div className="space-y-3 bg-white/5 p-4 rounded-2xl border border-white/5">
+                    <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Configure Local Players</h4>
+                    <div className="space-y-3.5 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
+                      {localPlayersSetup.map((pSetup, idx) => (
+                        <div key={idx} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 border-b border-white/5 pb-3 last:border-0 last:pb-0">
+                          <div className="flex-1 min-w-0">
+                            <label className="text-[9px] text-gray-500 font-bold uppercase tracking-wider block mb-1">Player {idx + 1} Name</label>
+                            <input
+                              type="text"
+                              value={pSetup.name}
+                              onChange={e => {
+                                const newSetup = [...localPlayersSetup]
+                                newSetup[idx].name = e.target.value
+                                setLocalPlayersSetup(newSetup)
+                              }}
+                              className="w-full px-3 py-1.5 bg-black/40 rounded-lg border border-white/10 outline-none text-white focus:border-orange-500/40 text-xs font-semibold"
+                              placeholder={`Player ${idx + 1}`}
+                            />
+                          </div>
+                          <div className="shrink-0">
+                            <label className="text-[9px] text-gray-500 font-bold uppercase tracking-wider block mb-1">Select Avatar Emoji</label>
+                            <div className="flex gap-1 overflow-x-auto pb-0.5 max-w-[170px] custom-scrollbar">
+                              {EMOJIS.map(emoji => (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  onClick={() => {
+                                    const newSetup = [...localPlayersSetup]
+                                    newSetup[idx].emoji = emoji
+                                    setLocalPlayersSetup(newSetup)
+                                  }}
+                                  className={`text-base p-1 rounded-lg border transition-all ${
+                                    pSetup.emoji === emoji
+                                      ? "border-orange-500 bg-orange-500/10 text-white"
+                                      : "border-white/5 bg-white/5 text-gray-400 hover:bg-white/10"
+                                  }`}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <Button
+                  onClick={startLocalGame}
+                  className="w-full bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-bold py-3 shadow-md shadow-orange-600/20"
+                >
+                  🚀 Launch Local Offline Match
                 </Button>
               </div>
             </div>
@@ -1293,7 +1939,10 @@ export default function KingdomRushboardPage() {
             <div className="space-y-2">
               {lobbyPlayers.map(p => (
                 <div key={p.presenceId} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
-                  <span className="text-xs font-bold text-white">{p.name} {p.isHost && "👑"}</span>
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <span>{p.emoji || "🦁"}</span>
+                    <span>{p.name} {p.isHost && "👑"}</span>
+                  </span>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${p.isReady ? "bg-green-500/20 text-green-400" : "bg-yellow-500/20 text-yellow-400"}`}>
                     {p.isReady ? "Ready" : "Not Ready"}
                   </span>
@@ -1332,7 +1981,6 @@ export default function KingdomRushboardPage() {
                   const isCurrentPlayerLanded = players[currentPlayerIdx]?.tileIndex === tile.index
                   
                   // Compute if this tile is a valid destination choice
-                  const isMyTurn = players[currentPlayerIdx]?.id === "player"
                   const maxAllowedStep = diceRoll !== null ? diceRoll : 0
                   const playerPos = players[currentPlayerIdx]?.tileIndex || 0
                   const isSelectableDestination = isMyTurn && diceRoll !== null && tile.index > playerPos && tile.index <= Math.min(30, playerPos + maxAllowedStep)
@@ -1379,8 +2027,17 @@ export default function KingdomRushboardPage() {
                       {/* Token occupants representation */}
                       <div className="flex flex-wrap gap-1 justify-center items-center">
                         {occupants.map(p => (
-                          <span key={p.id} className="text-xl sm:text-2xl animate-bounce drop-shadow" style={{ color: p.color }}>
+                          <span key={p.id} className="text-xl sm:text-2xl animate-bounce drop-shadow relative" style={{ color: p.color }}>
                             {p.emoji}
+                            {p.reaction && (
+                              <span
+                                key={p.reaction.id}
+                                className="absolute -top-9 left-1/2 -translate-x-1/2 bg-zinc-950/90 border border-white/20 px-2 py-0.5 rounded-full text-sm shadow-lg z-50 pointer-events-none"
+                                style={{ animation: "emoji-bubble 2s ease-out forwards" }}
+                              >
+                                {p.reaction.emoji}
+                              </span>
+                            )}
                           </span>
                         ))}
                       </div>
@@ -1418,7 +2075,7 @@ export default function KingdomRushboardPage() {
                   {/* Visual 3D style CSS dice face */}
                   <div
                     onClick={() => {
-                      if (players[currentPlayerIdx]?.id === "player") rollDice()
+                      if (isMyTurnToRoll()) rollDice()
                     }}
                     className={`w-20 h-20 bg-gradient-to-br from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white rounded-3xl shadow-xl flex items-center justify-center border-2 border-orange-400/40 cursor-pointer select-none transition-transform duration-300
                       ${isRolling ? "animate-spin scale-110" : "hover:scale-105 active:scale-95"}
@@ -1476,7 +2133,7 @@ export default function KingdomRushboardPage() {
                   </p>
                 </div>
 
-                {players[currentPlayerIdx]?.id === "player" && diceRoll !== null && (
+                {isMyTurn && diceRoll !== null && (
                   <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-[11px] text-center text-emerald-400 font-bold">
                     💡 Click on one of the glowing board tiles to complete your move!
                   </div>
@@ -1490,13 +2147,33 @@ export default function KingdomRushboardPage() {
                     <ShoppingBag className="h-4 w-4 text-orange-400" /> Backpack Inventory
                   </h3>
                   <span className="text-[10px] text-yellow-400 font-bold font-mono">
-                    {players.find(p => p.id === "player")?.coins} COINS
+                    {getViewedPlayer()?.coins} COINS
                   </span>
                 </div>
 
                 {(() => {
-                  const me = players.find(p => p.id === "player")
+                  const me = getViewedPlayer()
                   if (!me) return null
+                  const isLocalPassAndPlay = !roomCode && players.filter(p => !p.isBot).length > 1;
+
+                  if (isLocalPassAndPlay && !backpackRevealed) {
+                    return (
+                      <div className="p-4 bg-white/5 border border-white/5 rounded-2xl flex flex-col items-center justify-center text-center space-y-3">
+                        <Lock className="h-7 w-7 text-orange-400/80 animate-pulse" />
+                        <div>
+                          <h4 className="text-xs font-bold text-white">{me.emoji} {me.name}'s Backpack</h4>
+                          <p className="text-[9px] text-gray-400 mt-1 max-w-[220px] mx-auto">Items are hidden for privacy. Reveal them on your turn.</p>
+                        </div>
+                        <Button
+                          onClick={() => setBackpackRevealed(true)}
+                          className="bg-orange-600 hover:bg-orange-500 text-white font-bold text-[10px] py-1.5 px-3 rounded-lg flex items-center gap-1.5"
+                        >
+                          <Eye className="h-3 w-3" /> Reveal Backpack
+                        </Button>
+                      </div>
+                    )
+                  }
+
                   return (
                     <div className="space-y-4">
                       {/* Active Status protections */}
@@ -1527,7 +2204,7 @@ export default function KingdomRushboardPage() {
                             <button
                               key={idx}
                               onClick={() => useInventoryItem(item)}
-                              disabled={players[currentPlayerIdx]?.id !== "player" || placingTrap}
+                              disabled={!isMyTurn || placingTrap}
                               className="p-3 bg-white/5 border border-white/5 hover:border-orange-500/30 text-left rounded-xl transition-all disabled:opacity-40"
                             >
                               <h5 className="font-bold text-white text-xs">{item}</h5>
@@ -1535,6 +2212,16 @@ export default function KingdomRushboardPage() {
                             </button>
                           ))}
                         </div>
+                      )}
+
+                      {isLocalPassAndPlay && (
+                        <Button
+                          onClick={() => setBackpackRevealed(false)}
+                          variant="ghost"
+                          className="w-full text-[10px] font-bold text-gray-450 hover:text-white border border-white/5 hover:bg-white/5 rounded-lg py-1.5 flex items-center justify-center gap-1"
+                        >
+                          <Lock className="h-3.5 w-3.5" /> Lock & Hide Backpack
+                        </Button>
                       )}
                     </div>
                   )
@@ -1553,7 +2240,7 @@ export default function KingdomRushboardPage() {
                 <Star className="h-4 w-4 text-yellow-500" /> Active Quests
               </h3>
               {(() => {
-                const me = players.find(p => p.id === "player")
+                const me = getViewedPlayer()
                 if (!me) return null
                 const q = me.activeQuest
                 return (
@@ -1718,6 +2405,151 @@ export default function KingdomRushboardPage() {
             <Button onClick={handleReset} className="flex-grow bg-orange-600 hover:bg-orange-500 text-white py-3.5 rounded-2xl text-xs font-bold">
               <RotateCcw className="h-4 w-4 mr-1 inline-block" /> Re-launch Duel Arena
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL: Event Trigger (Treasure, Trap, Snake, Rare Item, Event) ─── */}
+      {eventOverlay && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <style dangerouslySetInnerHTML={{ __html: `
+            @keyframes pulse-glow {
+              0%, 100% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.4)); }
+              50% { transform: scale(1.15); filter: drop-shadow(0 0 30px rgba(251, 191, 36, 0.8)); }
+            }
+            @keyframes snake-slither {
+              0%, 100% { transform: translateY(0) rotate(0deg); }
+              20% { transform: translateY(-5px) rotate(-8deg); }
+              40% { transform: translateY(5px) rotate(8deg); }
+              60% { transform: translateY(-8px) rotate(-4deg); }
+              80% { transform: translateY(8px) rotate(4deg); }
+            }
+            @keyframes trap-snap {
+              0% { transform: scale(1); }
+              20% { transform: scale(1.2) rotate(-10deg); }
+              30% { transform: scale(0.95) rotate(5deg); }
+              40% { transform: scale(1.05) rotate(-2deg); }
+              50%, 100% { transform: scale(1) rotate(0deg); }
+            }
+            @keyframes coin-float {
+              0% { transform: translateY(20px) scale(0.5); opacity: 0; }
+              50% { opacity: 1; }
+              100% { transform: translateY(-80px) scale(1.1); opacity: 0; }
+            }
+            @keyframes spin-rift {
+              0% { transform: rotate(0deg) scale(1); }
+              50% { transform: rotate(185deg) scale(1.1); }
+              100% { transform: rotate(360deg) scale(1); }
+            }
+            @keyframes countdown-bar {
+              0% { width: 100%; }
+              100% { width: 0%; }
+            }
+            .anim-treasure { animation: pulse-glow 2s infinite ease-in-out; }
+            .anim-snake { animation: snake-slither 1.5s infinite ease-in-out; }
+            .anim-trap { animation: trap-snap 1.2s infinite ease-in-out; }
+            .anim-rift { animation: spin-rift 4s infinite linear; }
+            .coin-particle {
+              position: absolute;
+              animation: coin-float 1.8s infinite ease-out;
+            }
+            .anim-countdown { animation: countdown-bar 3.8s linear forwards; }
+          `}} />
+
+          <div className={`w-full max-w-md rounded-3xl border p-8 space-y-6 text-center shadow-2xl relative overflow-hidden bg-gradient-to-b from-zinc-950 to-black
+            ${eventOverlay.type === "TREASURE" ? "border-yellow-500/40 shadow-yellow-500/10" : ""}
+            ${eventOverlay.type === "TRAP" ? "border-red-500/40 shadow-red-500/10" : ""}
+            ${eventOverlay.type === "SNAKE" ? "border-purple-500/40 shadow-purple-500/10" : ""}
+            ${eventOverlay.type === "RARE_ITEM" ? "border-emerald-500/40 shadow-emerald-500/10" : ""}
+            ${eventOverlay.type === "EVENT" ? "border-cyan-500/40 shadow-cyan-500/10" : ""}
+          `}>
+            {eventOverlay.type === "TREASURE" && (
+              <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                <span className="coin-particle text-xl" style={{ left: "20%", top: "40%", animationDelay: "0s" }}>🪙</span>
+                <span className="coin-particle text-2xl" style={{ left: "40%", top: "50%", animationDelay: "0.4s" }}>🪙</span>
+                <span className="coin-particle text-lg" style={{ left: "65%", top: "45%", animationDelay: "0.8s" }}>🪙</span>
+                <span className="coin-particle text-2xl" style={{ left: "80%", top: "35%", animationDelay: "1.2s" }}>🪙</span>
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <span className={`px-3 py-1 bg-white/5 border text-[10px] uppercase tracking-widest font-black rounded-full block mx-auto w-max
+                ${eventOverlay.type === "TREASURE" ? "text-yellow-400 border-yellow-500/20" : ""}
+                ${eventOverlay.type === "TRAP" ? "text-red-400 border-red-500/20" : ""}
+                ${eventOverlay.type === "SNAKE" ? "text-purple-400 border-purple-500/20" : ""}
+                ${eventOverlay.type === "RARE_ITEM" ? "text-emerald-400 border-emerald-500/20" : ""}
+                ${eventOverlay.type === "EVENT" ? "text-cyan-400 border-cyan-500/20" : ""}
+              `}>
+                {eventOverlay.type === "TREASURE" ? "💰 Treasure Cache" : ""}
+                {eventOverlay.type === "TRAP" ? "🪤 Explosive Trap" : ""}
+                {eventOverlay.type === "SNAKE" ? "🐍 Snake Pit" : ""}
+                {eventOverlay.type === "RARE_ITEM" ? "💎 Legendary Loot" : ""}
+                {eventOverlay.type === "EVENT" ? "🌀 Realm Event" : ""}
+              </span>
+              <h2 className="text-2xl font-black text-white mt-3">{eventOverlay.title}</h2>
+              <p className="text-xs text-gray-400 font-bold flex items-center justify-center gap-1.5 mt-1">
+                <span>{eventOverlay.playerEmoji}</span>
+                <span>{eventOverlay.playerName} triggered this tile!</span>
+              </p>
+            </div>
+
+            <div className="py-6 flex items-center justify-center relative min-h-[120px]">
+              <div className={`text-7xl select-none drop-shadow-lg
+                ${eventOverlay.type === "TREASURE" ? "anim-treasure" : ""}
+                ${eventOverlay.type === "TRAP" ? "anim-trap" : ""}
+                ${eventOverlay.type === "SNAKE" ? "anim-snake" : ""}
+                ${eventOverlay.type === "RARE_ITEM" ? "anim-treasure" : ""}
+                ${eventOverlay.type === "EVENT" ? "anim-rift" : ""}
+              `}>
+                {eventOverlay.emoji}
+              </div>
+            </div>
+
+            <div className="bg-white/5 border border-white/5 p-4 rounded-2xl space-y-2 text-center">
+              <p className="text-xs text-gray-200 font-black">{eventOverlay.description}</p>
+            </div>
+
+            <div className="bg-orange-500/5 border border-orange-500/10 p-4 rounded-2xl relative">
+              <div className="absolute -top-2 left-6 w-3 h-3 bg-zinc-950 border-t border-l border-orange-500/10 rotate-45" />
+              <p className="text-xs text-orange-300 font-bold italic leading-relaxed">
+                🎙️ "{eventOverlay.commentary}"
+              </p>
+            </div>
+
+            {(() => {
+              const activePlayer = players[currentPlayerIdx]
+              const isBot = activePlayer?.isBot
+              const isMyTurnToConfirm = roomCode ? (isBot ? isLobbyHost : activePlayer.id === "player") : true
+
+              if (isBot) {
+                return (
+                  <div className="text-center space-y-2">
+                    <p className="text-[10px] text-gray-500 font-mono tracking-wider animate-pulse">
+                      🤖 Bot contemplating outcomes... auto-advancing
+                    </p>
+                    <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
+                      <div className="h-full bg-orange-500 anim-countdown" />
+                    </div>
+                  </div>
+                )
+              }
+
+              return (
+                <Button
+                  onClick={() => confirmEventOverlay(eventOverlay)}
+                  disabled={!isMyTurnToConfirm}
+                  className={`w-full py-4 text-white font-black text-sm rounded-xl transition-all duration-300 shadow-lg
+                    ${eventOverlay.type === "TREASURE" ? "bg-yellow-600 hover:bg-yellow-500 shadow-yellow-600/20" : ""}
+                    ${eventOverlay.type === "TRAP" ? "bg-red-600 hover:bg-red-500 shadow-red-600/20" : ""}
+                    ${eventOverlay.type === "SNAKE" ? "bg-purple-600 hover:bg-purple-500 shadow-purple-600/20" : ""}
+                    ${eventOverlay.type === "RARE_ITEM" ? "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20" : ""}
+                    ${eventOverlay.type === "EVENT" ? "bg-cyan-600 hover:bg-cyan-500 shadow-cyan-600/20" : ""}
+                  `}
+                >
+                  {isMyTurnToConfirm ? "Continue Adventuring ➔" : "Waiting for active player..."}
+                </Button>
+              )
+            })()}
           </div>
         </div>
       )}

@@ -718,10 +718,10 @@ export default function ChaosAlphabetPage() {
 
     const myPresId = Math.random().toString(36).substring(2, 9)
     setMyPresenceId(myPresId)
-    setPlayers([])
     setAnswers({})
     setSubmittedAnswers({})
     setSubmitTime(null)
+    setSelectedPlayerCompare(null)
 
     const channel = supabase.channel(`room:${code}`, {
       config: {
@@ -979,6 +979,7 @@ export default function ChaosAlphabetPage() {
     setAiAnswers({})
     setAiProgress(0)
     setSubmitTime(null)
+    setSelectedPlayerCompare(null)
     
     // Set match duration according to chaos modifiers
     const roundDuration = selectedModifier === "Time Rush" ? 30 : 60
@@ -1038,6 +1039,16 @@ export default function ChaosAlphabetPage() {
     answers,
     cumulativeUserScore
   ])
+
+  // When entering RESULTS phase in multiplayer, set default comparison opponent
+  useEffect(() => {
+    if (isMultiplayer && gameState === "RESULTS") {
+      const opponents = gamePlayers.filter(p => p.presenceId !== myPresenceId)
+      if (opponents.length > 0 && !selectedPlayerCompare) {
+        setSelectedPlayerCompare(opponents[0].presenceId)
+      }
+    }
+  }, [gameState, isMultiplayer, gamePlayers, myPresenceId, selectedPlayerCompare])
 
   // Load dynamic words pool from database / local storage
   useEffect(() => {
@@ -2230,14 +2241,16 @@ export default function ChaosAlphabetPage() {
                       <div className="flex items-center gap-2">
                         <span className="text-gray-500">Compare to:</span>
                         <select
-                          value={selectedPlayerCompare || ""}
+                          value={selectedPlayerCompare || (gamePlayers.filter(p => p.presenceId !== myPresenceId)[0]?.presenceId || "")}
                           onChange={e => setSelectedPlayerCompare(e.target.value || null)}
                           className="bg-black border border-white/10 text-white rounded px-2.5 py-1 text-xs outline-none"
                         >
-                          <option value="">AI Bot (Default)</option>
                           {gamePlayers.filter(p => p.presenceId !== myPresenceId).map(p => (
                             <option key={p.presenceId} value={p.presenceId}>{p.name}</option>
                           ))}
+                          {!isMultiplayer && (
+                            <option value="">AI Bot (Default)</option>
+                          )}
                         </select>
                       </div>
                     ) : (
@@ -2254,11 +2267,19 @@ export default function ChaosAlphabetPage() {
                       let compareAns = "";
                       let compareVal = { valid: false, reason: "" };
 
-                      if (isMultiplayer && selectedPlayerCompare) {
-                        const target = gamePlayers.find(p => p.presenceId === selectedPlayerCompare);
-                        compareName = target ? target.name : "Player";
-                        compareAns = (submittedAnswers[selectedPlayerCompare]?.answers?.[cat] || "").trim();
-                        compareVal = isValidAnswerWithModifier(cat, compareAns, letter, selectedModifier);
+                      if (isMultiplayer) {
+                        const opponents = gamePlayers.filter(p => p.presenceId !== myPresenceId);
+                        const targetId = selectedPlayerCompare || (opponents.length > 0 ? opponents[0].presenceId : null);
+                        if (targetId) {
+                          const target = gamePlayers.find(p => p.presenceId === targetId);
+                          compareName = target ? target.name : "Player";
+                          compareAns = (submittedAnswers[targetId]?.answers?.[cat] || "").trim();
+                          compareVal = isValidAnswerWithModifier(cat, compareAns, letter, selectedModifier);
+                        } else {
+                          compareName = "No Opponent";
+                          compareAns = "";
+                          compareVal = { valid: false, reason: "No opponent joined" };
+                        }
                       } else {
                         compareAns = (aiAnswers[cat] || "").trim();
                         compareVal = isValidAnswerWithModifier(cat, compareAns, letter, selectedModifier);
