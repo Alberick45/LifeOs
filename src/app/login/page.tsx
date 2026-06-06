@@ -2,12 +2,13 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { supabase } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { motion, AnimatePresence } from "framer-motion"
-import { Sparkles, Mail, Lock, CheckCircle2, ArrowRight, Eye, EyeOff, AlertCircle } from "lucide-react"
+import { Sparkles, Mail, Lock, ArrowRight, ArrowLeft, Eye, EyeOff, AlertCircle } from "lucide-react"
 
 export default function LoginPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login')
@@ -67,6 +68,16 @@ export default function LoginPage() {
       {/* Background Decorative Glowing Blobs */}
       <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-primary/10 rounded-full blur-[100px] pointer-events-none animate-pulse duration-[8000ms]" />
       <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-80 h-80 bg-emerald-500/10 rounded-full blur-[100px] pointer-events-none animate-pulse duration-[6000ms]" />
+
+      {/* Back to Home */}
+      <Link
+        href="/"
+        className="absolute top-5 left-5 flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors group z-20"
+      >
+        <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
+        <span>Back to Home</span>
+      </Link>
+
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
