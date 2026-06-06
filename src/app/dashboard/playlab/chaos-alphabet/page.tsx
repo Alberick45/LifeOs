@@ -491,6 +491,13 @@ export default function ChaosAlphabetPage() {
     submitTime: number | null
   }>>({})
   const [selectedPlayerCompare, setSelectedPlayerCompare] = useState<string | null>(null)
+  const [gamePlayers, setGamePlayers] = useState<any[]>([])
+  const [opponentsProgress, setOpponentsProgress] = useState<Record<string, {
+    answersCount: number
+    status: string
+  }>>({})
+  const [multiplayerScoreSaved, setMultiplayerScoreSaved] = useState(false)
+  const [dbWordsPool, setDbWordsPool] = useState<any[]>([])
 
   // Leaderboard statistics
   const [soloLeaderboard, setSoloLeaderboard] = useState<{
@@ -763,6 +770,13 @@ export default function ChaosAlphabetPage() {
     // Start game signal
     channel.on('broadcast', { event: 'start-game' }, ({ payload }) => {
       const targetRound = payload.currentRound || 1
+      const currentActivePlayers: any[] = payload.playersList || [];
+
+      if (payload.playersList) {
+        setGamePlayers(payload.playersList)
+      }
+      setOpponentsProgress({})
+      setMultiplayerScoreSaved(false)
 
       if (targetRound > 1) {
         const submissionDuration = selectedModifier === "Time Rush" ? 30 - timer : 60 - timer
@@ -771,7 +785,8 @@ export default function ChaosAlphabetPage() {
 
         setCumulativeMultiplayerScores(prev => {
           const updated = { ...prev }
-          players.forEach(p => {
+          const activePlayers = currentActivePlayers.length > 0 ? currentActivePlayers : gamePlayers
+          activePlayers.forEach((p: any) => {
             const isMe = p.presenceId === myPresenceId
             const pAnswers = isMe ? answers : (submittedAnswers[p.presenceId]?.answers || {})
             const pTime = isMe ? submissionDuration : (submittedAnswers[p.presenceId]?.submitTime || null)
@@ -809,6 +824,24 @@ export default function ChaosAlphabetPage() {
           name: payload.name,
           answers: payload.answers,
           submitTime: payload.submitTime,
+        }
+      }))
+      setOpponentsProgress(prev => ({
+        ...prev,
+        [payload.presenceId]: {
+          answersCount: Object.keys(payload.answers || {}).filter(k => payload.answers[k]?.trim()).length,
+          status: "submitted",
+        }
+      }))
+    })
+
+    // Sync typing progress
+    channel.on('broadcast', { event: 'typing-progress' }, ({ payload }) => {
+      setOpponentsProgress(prev => ({
+        ...prev,
+        [payload.presenceId]: {
+          answersCount: payload.answersCount,
+          status: payload.status,
         }
       }))
     })
@@ -862,6 +895,7 @@ export default function ChaosAlphabetPage() {
         selectedModifier: selectedModifier,
         currentRound: roundNum,
         maxRounds: maxRounds,
+        playersList: roundNum === 1 ? players : gamePlayers,
       }
     })
   }
@@ -971,6 +1005,64 @@ export default function ChaosAlphabetPage() {
     }
   }, [gameState, countdown])
 
+  // Save final multiplayer score to database once everyone has submitted
+  useEffect(() => {
+    if (
+      isMultiplayer &&
+      gameState === "RESULTS" &&
+      currentRound === maxRounds &&
+      !multiplayerScoreSaved &&
+      gamePlayers.length > 0 &&
+      submitTime !== null
+    ) {
+      const everyoneSubmitted = gamePlayers.every(p => p.presenceId === myPresenceId || !!submittedAnswers[p.presenceId]);
+      if (everyoneSubmitted) {
+        // Calculate my final round score
+        const myFinalRoundScore = calculatePlayerScore(answers, submitTime).total;
+        const totalMultiplayerScore = cumulativeUserScore + myFinalRoundScore;
+        
+        saveSoloScore(totalMultiplayerScore);
+        setMultiplayerScoreSaved(true);
+        triggerAlert("Match scores saved to leaderboard!", true);
+      }
+    }
+  }, [
+    isMultiplayer,
+    gameState,
+    currentRound,
+    maxRounds,
+    multiplayerScoreSaved,
+    gamePlayers,
+    submittedAnswers,
+    submitTime,
+    answers,
+    cumulativeUserScore
+  ])
+
+  // Load dynamic words pool from database / local storage
+  useEffect(() => {
+    const fetchDbWords = async () => {
+      try {
+        const { data } = await supabase
+          .from("playlab_words")
+          .select("word, category")
+          .eq("game_id", "chaos_alphabet")
+          .eq("status", "approved")
+        
+        let list = data || []
+        const local = localStorage.getItem("local_playlab_words")
+        if (local) {
+          const parsed = JSON.parse(local).filter((w: any) => w.game_id === "chaos_alphabet" && w.status === "approved")
+          list = [...list, ...parsed]
+        }
+        setDbWordsPool(list)
+      } catch (err) {
+        console.error("Failed to load dynamic words catalog:", err)
+      }
+    }
+    fetchDbWords()
+  }, [gameState])
+
   // Handle Game Timer & AI Competitor Sim
   useEffect(() => {
     if (gameState === "PLAYING") {
@@ -1072,6 +1164,13 @@ export default function ChaosAlphabetPage() {
     else if (dictKey.includes("food")) dictKey = "food"
     else if (dictKey.includes("profession")) dictKey = "profession"
     else if (dictKey.includes("sports")) dictKey = "sports"
+
+    // Check dynamic words database pool
+    const matchesDb = dbWordsPool.some(w => 
+      w.word.toLowerCase() === cleaned &&
+      w.category.toLowerCase().includes(dictKey)
+    )
+    if (matchesDb) return true
 
     // If we have a list for this category, validate against it
     const categoryDict = DICTIONARY[dictKey]
@@ -1304,15 +1403,18 @@ export default function ChaosAlphabetPage() {
     const updatedAnswers = { ...answers, [category]: value }
     setAnswers(updatedAnswers)
 
-    // Update real-time status to others in multiplayer channel
+    // Update real-time status to others in multiplayer channel via broadcast
     if (isMultiplayer && channelRef.current) {
       const filledCount = Object.keys(updatedAnswers).filter(k => updatedAnswers[k]?.trim()).length
-      channelRef.current.track({
-        name: username || "You",
-        isHost: isHost,
-        status: "typing",
-        answersCount: filledCount,
-      }).catch(() => {})
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'typing-progress',
+        payload: {
+          presenceId: myPresenceId,
+          answersCount: filledCount,
+          status: "typing",
+        }
+      })
     }
   }
 
@@ -1890,23 +1992,30 @@ export default function ChaosAlphabetPage() {
                   <div className="space-y-2">
                     <p className="text-[10px] text-gray-500 font-bold uppercase">Lobby Opponents</p>
                     <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                      {players.filter(p => p.presenceId !== myPresenceId).map(p => (
-                        <div key={p.presenceId} className="p-2.5 bg-white/5 rounded-xl border border-white/5 flex flex-col gap-2">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-semibold truncate">{p.name}</span>
-                            <span className={`text-[9px] font-black uppercase ${p.status === "submitted" ? 'text-green-400' : 'text-yellow-400 animate-pulse'}`}>
-                              {p.status === "submitted" ? 'Submitted' : 'Typing...'}
-                            </span>
+                      {gamePlayers.filter(p => p.presenceId !== myPresenceId).map(p => {
+                        const isSubmitted = !!submittedAnswers[p.presenceId];
+                        const answersCount = isSubmitted 
+                          ? Object.keys(submittedAnswers[p.presenceId].answers || {}).filter(k => submittedAnswers[p.presenceId].answers[k]?.trim()).length
+                          : (opponentsProgress[p.presenceId]?.answersCount || 0);
+                        const statusText = isSubmitted ? "Submitted" : (opponentsProgress[p.presenceId]?.status === "typing" ? "Typing..." : "Playing...");
+                        return (
+                          <div key={p.presenceId} className="p-2.5 bg-white/5 rounded-xl border border-white/5 flex flex-col gap-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-semibold truncate">{p.name}</span>
+                              <span className={`text-[9px] font-black uppercase ${isSubmitted ? 'text-green-400' : 'text-yellow-400 animate-pulse'}`}>
+                                {statusText}
+                              </span>
+                            </div>
+                            
+                            <div className="w-full bg-black/40 rounded-full h-1 overflow-hidden">
+                              <div 
+                                className="bg-primary h-full transition-all duration-500" 
+                                style={{ width: `${(answersCount / categories.length) * 100}%` }}
+                              ></div>
+                            </div>
                           </div>
-                          
-                          <div className="w-full bg-black/40 rounded-full h-1 overflow-hidden">
-                            <div 
-                              className="bg-primary h-full transition-all duration-500" 
-                              style={{ width: `${(p.answersCount / categories.length) * 100}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -1930,21 +2039,25 @@ export default function ChaosAlphabetPage() {
         {gameState === "RESULTS" && (
           <div className="w-full max-w-4xl space-y-8 animate-in slide-in-from-bottom-8 duration-500">
             
-            {isMultiplayer && !players.every(p => p.status === "submitted" || p.presenceId === myPresenceId) ? (
+            {isMultiplayer && !gamePlayers.every(p => p.presenceId === myPresenceId || !!submittedAnswers[p.presenceId]) ? (
               /* Multiplayer Waiting Room inside Results */
               <div className="glass-panel p-8 rounded-3xl border border-white/5 text-center space-y-4 max-w-md mx-auto">
                 <RefreshCw className="h-10 w-10 text-yellow-400 animate-spin mx-auto" />
                 <h3 className="text-xl font-bold">Waiting for players...</h3>
                 <p className="text-xs text-gray-400">Locking in scores. Waiting for everyone to submit or their timers to expire.</p>
                 <div className="space-y-2 mt-4 text-left border-t border-white/5 pt-4">
-                  {players.map(p => (
-                    <div key={p.presenceId} className="flex justify-between items-center text-xs p-2 bg-white/5 rounded-lg border border-white/5">
-                      <span className="font-semibold">{p.name} {p.presenceId === myPresenceId && "(You)"}</span>
-                      <span className={p.status === "submitted" ? "text-green-400 font-bold" : "text-yellow-400 animate-pulse font-bold"}>
-                        {p.status === "submitted" ? "✓ LOCKED IN" : "✏ PLAYING..."}
-                      </span>
-                    </div>
-                  ))}
+                  {gamePlayers.map(p => {
+                    const isMe = p.presenceId === myPresenceId;
+                    const isSubmitted = isMe ? (submitTime !== null) : !!submittedAnswers[p.presenceId];
+                    return (
+                      <div key={p.presenceId} className="flex justify-between items-center text-xs p-2 bg-white/5 rounded-lg border border-white/5">
+                        <span className="font-semibold">{p.name} {isMe && "(You)"}</span>
+                        <span className={isSubmitted ? "text-green-400 font-bold" : "text-yellow-400 animate-pulse font-bold"}>
+                          {isSubmitted ? "✓ LOCKED IN" : "✏ PLAYING..."}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ) : (
@@ -2069,7 +2182,7 @@ export default function ChaosAlphabetPage() {
                         <div className="space-y-2 mt-4 max-h-[220px] overflow-y-auto pr-1">
                           {(() => {
                             // Compile scores for all lobby participants
-                            const rankings = players.map(p => {
+                            const rankings = gamePlayers.map(p => {
                               const isMe = p.presenceId === myPresenceId;
                               const pAnswers = isMe ? answers : (submittedAnswers[p.presenceId]?.answers || {});
                               const pTime = isMe ? submitTime : (submittedAnswers[p.presenceId]?.submitTime || null);
@@ -2122,7 +2235,7 @@ export default function ChaosAlphabetPage() {
                           className="bg-black border border-white/10 text-white rounded px-2.5 py-1 text-xs outline-none"
                         >
                           <option value="">AI Bot (Default)</option>
-                          {players.filter(p => p.presenceId !== myPresenceId).map(p => (
+                          {gamePlayers.filter(p => p.presenceId !== myPresenceId).map(p => (
                             <option key={p.presenceId} value={p.presenceId}>{p.name}</option>
                           ))}
                         </select>
@@ -2142,7 +2255,7 @@ export default function ChaosAlphabetPage() {
                       let compareVal = { valid: false, reason: "" };
 
                       if (isMultiplayer && selectedPlayerCompare) {
-                        const target = players.find(p => p.presenceId === selectedPlayerCompare);
+                        const target = gamePlayers.find(p => p.presenceId === selectedPlayerCompare);
                         compareName = target ? target.name : "Player";
                         compareAns = (submittedAnswers[selectedPlayerCompare]?.answers?.[cat] || "").trim();
                         compareVal = isValidAnswerWithModifier(cat, compareAns, letter, selectedModifier);

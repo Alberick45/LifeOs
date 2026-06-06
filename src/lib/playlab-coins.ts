@@ -23,7 +23,7 @@ export interface PlaylabProgress {
   coins: number
   wordchemy_discovered: string[]
   wordchemy_unlocked_packs: string[]
-  high_scores: Record<string, number>
+  high_scores: Record<string, any>
   rh_unlocked_envs: string[]
 }
 

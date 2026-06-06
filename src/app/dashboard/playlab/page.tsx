@@ -132,13 +132,19 @@ export default function PlayLabPage() {
           </div>
         </div>
 
-        {/* Reset Button */}
-        <div className="relative">
-          {!showResetConfirm ? (
-            <button
-              onClick={() => setShowResetConfirm(true)}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-gray-400 text-xs hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400 transition-all"
-            >
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard/playlab/developer" className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-gray-400 text-xs hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-all font-semibold">
+            <Sparkles className="h-3.5 w-3.5" />
+            Developer Panel
+          </Link>
+
+          {/* Reset Button */}
+          <div className="relative">
+            {!showResetConfirm ? (
+              <button
+                onClick={() => setShowResetConfirm(true)}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-gray-400 text-xs hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400 transition-all"
+              >
               <RotateCcw className="h-3.5 w-3.5" />
               Reset Game Data
             </button>
@@ -157,6 +163,7 @@ export default function PlayLabPage() {
           )}
         </div>
       </div>
+    </div>
 
       {/* Game Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -230,7 +230,7 @@ CREATE TABLE IF NOT EXISTS playlab_progress (
 );
 
 ALTER TABLE playlab_progress ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can view their own playlab progress" ON playlab_progress FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Anyone can view playlab progress" ON playlab_progress FOR SELECT USING (true);
 CREATE POLICY "Users can insert their own playlab progress" ON playlab_progress FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update their own playlab progress" ON playlab_progress FOR UPDATE USING (auth.uid() = user_id);
 
@@ -247,4 +247,35 @@ DROP TRIGGER IF EXISTS trg_playlab_updated_at ON playlab_progress;
 CREATE TRIGGER trg_playlab_updated_at
   BEFORE UPDATE ON playlab_progress
   FOR EACH ROW EXECUTE FUNCTION update_playlab_updated_at();
+
+-- PlayLab Dynamic Words Table
+CREATE TABLE IF NOT EXISTS playlab_words (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    game_id TEXT NOT NULL, -- e.g., 'reverse_hangman', 'chaos_alphabet'
+    word TEXT NOT NULL,
+    category TEXT NOT NULL,
+    hint TEXT,
+    difficulty TEXT, -- 'Beginner', 'Normal', 'Expert'
+    flagged_count INT DEFAULT 0,
+    flagged_reason TEXT[] DEFAULT '{}'::text[],
+    status TEXT DEFAULT 'approved', -- 'pending', 'approved', 'flagged', 'archived'
+    created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable RLS for playlab_words
+ALTER TABLE playlab_words ENABLE ROW LEVEL SECURITY;
+
+-- Allow public read access to approved words
+CREATE POLICY "Anyone can view approved words" ON playlab_words 
+    FOR SELECT USING (status = 'approved');
+
+-- Allow anyone to insert words
+CREATE POLICY "Anyone can insert words" ON playlab_words 
+    FOR INSERT WITH CHECK (true);
+
+-- Allow updates to flag details
+CREATE POLICY "Anyone can update word flags" ON playlab_words 
+    FOR UPDATE USING (true) WITH CHECK (true);
+
 
