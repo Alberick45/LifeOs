@@ -96,6 +96,11 @@ function DashboardContent() {
       if (cached) {
         try {
           const parsed = JSON.parse(cached)
+          parsed.sort((a: any, b: any) => {
+            const scoreA = (a.strength_score || 0) + (a.trust_score || 0);
+            const scoreB = (b.strength_score || 0) + (b.trust_score || 0);
+            return scoreB - scoreA;
+          });
           setPeople(parsed)
           setLoading(false)
         } catch (e) {
@@ -185,6 +190,13 @@ function DashboardContent() {
         ...p,
         handle: p.linked_user_id ? profileMap.get(p.linked_user_id) || null : null
       }))
+
+      // Sort by combined trust and strength score descending
+      freshPeople.sort((a, b) => {
+        const scoreA = (a.strength_score || 0) + (a.trust_score || 0);
+        const scoreB = (b.strength_score || 0) + (b.trust_score || 0);
+        return scoreB - scoreA;
+      });
 
       setPeople(freshPeople)
       if (typeof window !== "undefined") {

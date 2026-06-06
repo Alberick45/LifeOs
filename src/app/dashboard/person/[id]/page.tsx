@@ -918,23 +918,29 @@ export default function PersonProfilePage() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <label className="text-sm text-gray-400">Strength Score (0-100)</label>
+                      <label className="flex justify-between text-sm font-medium text-gray-300">
+                        <span>Strength Score</span>
+                        <span className="text-primary">{editData.strength_score}%</span>
+                      </label>
                       <input 
-                        type="number" 
+                        type="range" 
                         min="0" max="100"
                         value={editData.strength_score}
                         onChange={e => setEditData({...editData, strength_score: parseInt(e.target.value) || 0})}
-                        className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
+                        className="w-full accent-primary"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm text-gray-400">Trust Score (0-100)</label>
+                      <label className="flex justify-between text-sm font-medium text-gray-300">
+                        <span>Trust Score</span>
+                        <span className="text-emerald-400">{editData.trust_score}%</span>
+                      </label>
                       <input 
-                        type="number" 
+                        type="range" 
                         min="0" max="100"
                         value={editData.trust_score}
                         onChange={e => setEditData({...editData, trust_score: parseInt(e.target.value) || 0})}
-                        className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
+                        className="w-full accent-emerald-500"
                       />
                     </div>
                   </div>
