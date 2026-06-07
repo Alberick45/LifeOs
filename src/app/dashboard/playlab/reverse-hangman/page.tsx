@@ -1230,6 +1230,25 @@ export default function ReverseHangmanPage() {
     }
   }, [guessedLetters, mistakes, secretWord, shieldActive, triggerGameOver, joinedRoom, isCampaign, difficulty, survivalSuccessMsg, updateCoins])
 
+  // ── Physical keyboard input ─────────────────────────────────────────────
+  useEffect(() => {
+    if (gameState !== "SOLO_PLAY" && gameState !== "DM_PLAY") return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore when user is typing in an input / textarea
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return
+      const key = e.key.toUpperCase()
+      if (/^[A-Z]$/.test(key)) {
+        e.preventDefault()
+        if (gameState === "SOLO_PLAY") {
+          makeSoloGuess(key)
+        }
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [gameState, makeSoloGuess])
+
   const useScan = () => {
     if (scansCount <= 0) return
     const unrevealed = secretWord.split("").filter(l => !guessedLetters.includes(l))
@@ -2198,6 +2217,9 @@ export default function ReverseHangmanPage() {
                   <KeyRow letters="QWERTYUIOP" guessedLetters={guessedLetters} secretWord={secretWord} onGuess={makeSoloGuess} />
                   <KeyRow letters="ASDFGHJKL" guessedLetters={guessedLetters} secretWord={secretWord} onGuess={makeSoloGuess} />
                   <KeyRow letters="ZXCVBNM" guessedLetters={guessedLetters} secretWord={secretWord} onGuess={makeSoloGuess} />
+                  <p className="text-center text-[10px] text-gray-600 pt-1 select-none">
+                    ⌨️ or type on your keyboard
+                  </p>
                 </div>
               )}
 
