@@ -21,6 +21,7 @@ export default function SettingsPage() {
   const [birthday, setBirthday] = useState("")
   const [interests, setInterests] = useState("")
   const [apiKey, setApiKey] = useState("")
+  const [phone, setPhone] = useState("")
   
   const [uploadingImage, setUploadingImage] = useState(false)
 
@@ -34,6 +35,7 @@ export default function SettingsPage() {
         setBirthday(session.user.user_metadata?.birthday || "")
         setInterests(session.user.user_metadata?.interests || "")
         setApiKey(session.user.user_metadata?.gemini_api_key || "")
+        setPhone(session.user.user_metadata?.phone || "")
 
         // Fetch Handle
         const { data: profile } = await supabase.from('profiles').select('handle').eq('id', session.user.id).single()
@@ -103,7 +105,8 @@ export default function SettingsPage() {
           full_name: fullName,
           birthday: birthday,
           interests: interests,
-          gemini_api_key: apiKey
+          gemini_api_key: apiKey,
+          phone: phone
         }
       })
       if (error) throw error
@@ -311,6 +314,16 @@ export default function SettingsPage() {
                 type="date" 
                 value={birthday}
                 onChange={e => setBirthday(e.target.value)}
+                className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm text-gray-400">Phone Number</label>
+              <input 
+                type="tel" 
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                placeholder="E.g., +233 24 000 0000"
                 className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
               />
             </div>
