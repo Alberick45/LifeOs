@@ -69,14 +69,21 @@ function DashboardContent() {
   const [reviewEditData, setReviewEditData] = useState({ name: '', relationship_type: '' })
   const [reviewPhones, setReviewPhones] = useState<any[]>([])
 
-  const fetchReviewPhones = async (personId: string) => {
+  const fetchReviewPhones = async (personId: string, primaryPhone?: string | null) => {
     try {
       const { data, error } = await supabase
         .from('person_phones')
         .select('*')
         .eq('person_id', personId)
       if (error) throw error
-      setReviewPhones(data || [])
+      
+      if (data && data.length > 0) {
+        setReviewPhones(data)
+      } else if (primaryPhone) {
+        setReviewPhones([{ phone: primaryPhone, label: 'Primary' }])
+      } else {
+        setReviewPhones([])
+      }
     } catch (e) {
       console.error("Error fetching review phones:", e)
     }
@@ -346,7 +353,7 @@ function DashboardContent() {
         setCurrentReviewIndex(nextIndex)
         const nextPerson = reviewQueue[nextIndex]
         setReviewEditData({ name: nextPerson.name, relationship_type: nextPerson.relationship_type })
-        fetchReviewPhones(nextPerson.id)
+        fetchReviewPhones(nextPerson.id, nextPerson.phone)
       } else {
         setIsReviewOpen(false)
       }
@@ -376,7 +383,7 @@ function DashboardContent() {
         setCurrentReviewIndex(nextIndex)
         const nextPerson = reviewQueue[nextIndex]
         setReviewEditData({ name: nextPerson.name, relationship_type: nextPerson.relationship_type })
-        fetchReviewPhones(nextPerson.id)
+        fetchReviewPhones(nextPerson.id, nextPerson.phone)
       } else {
         setIsReviewOpen(false)
       }
@@ -452,7 +459,7 @@ function DashboardContent() {
               setIsReviewOpen(true);
               const p = pendingVerificationPeople[0];
               setReviewEditData({ name: p.name, relationship_type: p.relationship_type });
-              fetchReviewPhones(p.id);
+              fetchReviewPhones(p.id, p.phone);
             }}
             className="bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-full shadow-[0_0_15px_rgba(139,92,246,0.4)] px-6 shrink-0 w-full sm:w-auto"
           >
