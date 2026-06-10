@@ -18,8 +18,8 @@ export default function AddPersonPage() {
     relationship_type: "",
     pronouns: "Rather not say",
     birthday: "",
-    strength_score: 50,
-    trust_score: 50,
+    strength_score: 0,
+    trust_score: 0,
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -61,7 +61,7 @@ export default function AddPersonPage() {
       <Link href="/dashboard" className="inline-flex items-center text-sm text-gray-400 hover:text-white transition-colors">
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Network
       </Link>
-      
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -77,28 +77,28 @@ export default function AddPersonPage() {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-300">Full Name</label>
-                  <Input 
-                    required 
+                  <Input
+                    required
                     placeholder="E.g., Jane Doe"
                     value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   />
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-300">Relationship Type</label>
-                    <Input 
+                    <Input
                       placeholder="Family, Friend, Colleague..."
                       value={formData.relationship_type}
-                      onChange={(e) => setFormData({...formData, relationship_type: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, relationship_type: e.target.value })}
                     />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-300">Pronouns</label>
-                    <select 
+                    <select
                       value={formData.pronouns}
-                      onChange={(e) => setFormData({...formData, pronouns: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, pronouns: e.target.value })}
                       className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-primary/50 [&>option]:bg-zinc-900"
                     >
                       <option value="He/Him">He/Him</option>
@@ -109,10 +109,10 @@ export default function AddPersonPage() {
                   </div>
                   <div className="space-y-2 col-span-2">
                     <label className="text-sm font-medium text-gray-300">Birthday</label>
-                    <Input 
+                    <Input
                       type="date"
                       value={formData.birthday}
-                      onChange={(e) => setFormData({...formData, birthday: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, birthday: e.target.value })}
                     />
                   </div>
                 </div>
@@ -123,12 +123,12 @@ export default function AddPersonPage() {
                       <span>Relationship Strength</span>
                       <span className="text-primary">{formData.strength_score}%</span>
                     </label>
-                    <input 
-                      type="range" 
-                      min="0" max="100" 
+                    <input
+                      type="range"
+                      min="0" max="100"
                       className="w-full accent-primary"
                       value={formData.strength_score}
-                      onChange={(e) => setFormData({...formData, strength_score: parseInt(e.target.value)})}
+                      onChange={(e) => setFormData({ ...formData, strength_score: parseInt(e.target.value) })}
                     />
                   </div>
 
@@ -137,12 +137,12 @@ export default function AddPersonPage() {
                       <span>Trust Score</span>
                       <span className="text-emerald-400">{formData.trust_score}%</span>
                     </label>
-                    <input 
-                      type="range" 
-                      min="0" max="100" 
+                    <input
+                      type="range"
+                      min="0" max="100"
                       className="w-full accent-emerald-500"
                       value={formData.trust_score}
-                      onChange={(e) => setFormData({...formData, trust_score: parseInt(e.target.value)})}
+                      onChange={(e) => setFormData({ ...formData, trust_score: parseInt(e.target.value) })}
                     />
                   </div>
                 </div>

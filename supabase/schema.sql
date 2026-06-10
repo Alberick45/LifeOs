@@ -15,8 +15,8 @@ CREATE TABLE IF NOT EXISTS people (
     relationship_type TEXT,
     pronouns TEXT,
     status TEXT,
-    strength_score INT DEFAULT 50,
-    trust_score INT DEFAULT 50,
+    strength_score INT DEFAULT 0,
+    trust_score INT DEFAULT 0,
     is_archived BOOLEAN DEFAULT FALSE,
     linked_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -277,5 +277,32 @@ CREATE POLICY "Anyone can insert words" ON playlab_words
 -- Allow updates to flag details
 CREATE POLICY "Anyone can update word flags" ON playlab_words 
     FOR UPDATE USING (true) WITH CHECK (true);
+
+-- Person Phones Table (One-to-many relationship for contact phone numbers)
+CREATE TABLE IF NOT EXISTS person_phones (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    person_id UUID REFERENCES people(id) ON DELETE CASCADE,
+    phone TEXT NOT NULL,
+    label TEXT DEFAULT 'Mobile',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable RLS for person_phones
+ALTER TABLE person_phones ENABLE ROW LEVEL SECURITY;
+
+-- Allow users to manage their own person_phones (based on the user owning the person)
+CREATE POLICY "Users can select their own person_phones" ON person_phones 
+    FOR SELECT USING (EXISTS (SELECT 1 FROM people WHERE people.id = person_phones.person_id AND people.user_id = auth.uid()));
+
+CREATE POLICY "Users can insert their own person_phones" ON person_phones 
+    FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM people WHERE people.id = person_phones.person_id AND people.user_id = auth.uid()));
+
+CREATE POLICY "Users can update their own person_phones" ON person_phones 
+    FOR UPDATE USING (EXISTS (SELECT 1 FROM people WHERE people.id = person_phones.person_id AND people.user_id = auth.uid()))
+    WITH CHECK (EXISTS (SELECT 1 FROM people WHERE people.id = person_phones.person_id AND people.user_id = auth.uid()));
+
+CREATE POLICY "Users can delete their own person_phones" ON person_phones 
+    FOR DELETE USING (EXISTS (SELECT 1 FROM people WHERE people.id = person_phones.person_id AND people.user_id = auth.uid()));
+
 
 

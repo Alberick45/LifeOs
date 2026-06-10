@@ -61,16 +61,17 @@ export default function PersonProfilePage() {
   const [interactions, setInteractions] = useState<Interaction[]>([])
   const [tags, setTags] = useState<TagData[]>([])
   const [loading, setLoading] = useState(true)
+  const [phones, setPhones] = useState<{ id?: string, phone: string, label: string }[]>([])
 
   // Form State
   const [isLogging, setIsLogging] = useState(false)
   const [type, setType] = useState('meet')
   const [notes, setNotes] = useState('')
   const [sentiment, setSentiment] = useState('positive')
-  
+
   // Edit State
   const [isEditing, setIsEditing] = useState(false)
-  const [editData, setEditData] = useState<{name: string, relationship_type: string, birthday: string, photo: string, phone: string, email: string, address: string, strength_score: number, trust_score: number, is_archived: boolean, pronouns: string}>({
+  const [editData, setEditData] = useState<{ name: string, relationship_type: string, birthday: string, photo: string, phone: string, email: string, address: string, strength_score: number, trust_score: number, is_archived: boolean, pronouns: string }>({
     name: '', relationship_type: '', birthday: '', photo: '', phone: '', email: '', address: '', strength_score: 50, trust_score: 50, is_archived: false, pronouns: 'Rather not say'
   })
   const [savingEdit, setSavingEdit] = useState(false)
@@ -104,6 +105,42 @@ export default function PersonProfilePage() {
   }, [personId])
 
   const fetchData = async () => {
+    // Load from cache first for instant loading
+    if (typeof window !== "undefined") {
+      const cachedPerson = localStorage.getItem(`lifeos_person_${personId}_cache`)
+      const cachedPhones = localStorage.getItem(`lifeos_person_${personId}_phones_cache`)
+      const cachedInteractions = localStorage.getItem(`lifeos_person_${personId}_interactions_cache`)
+      const cachedTags = localStorage.getItem(`lifeos_person_${personId}_tags_cache`)
+      
+      if (cachedPerson) {
+        try {
+          const parsedPerson = JSON.parse(cachedPerson)
+          setPerson(parsedPerson)
+          setEditData({
+            name: parsedPerson.name || '',
+            relationship_type: parsedPerson.relationship_type || '',
+            birthday: parsedPerson.birthday || '',
+            photo: parsedPerson.photo || '',
+            phone: parsedPerson.phone || '',
+            email: parsedPerson.email || '',
+            address: parsedPerson.address || '',
+            strength_score: parsedPerson.strength_score || 0,
+            trust_score: parsedPerson.trust_score || 0,
+            is_archived: parsedPerson.is_archived || false,
+            pronouns: parsedPerson.pronouns || 'Rather not say'
+          })
+          
+          if (cachedPhones) setPhones(JSON.parse(cachedPhones))
+          if (cachedInteractions) setInteractions(JSON.parse(cachedInteractions))
+          if (cachedTags) setTags(JSON.parse(cachedTags))
+          
+          setLoading(false)
+        } catch (e) {
+          console.error("Failed to parse cached details:", e)
+        }
+      }
+    }
+
     try {
       // Fetch Person
       const { data: pData, error: pError } = await supabase
@@ -111,9 +148,9 @@ export default function PersonProfilePage() {
         .select('*')
         .eq('id', personId)
         .single()
-      
+
       if (pError) throw pError
-      
+
       let resolvedPerson = pData
       if (pData.linked_user_id) {
         const { data: profile } = await supabase
@@ -134,11 +171,26 @@ export default function PersonProfilePage() {
         phone: pData.phone || '',
         email: pData.email || '',
         address: pData.address || '',
-        strength_score: pData.strength_score || 50,
-        trust_score: pData.trust_score || 50,
+        strength_score: pData.strength_score || 0,
+        trust_score: pData.trust_score || 0,
         is_archived: pData.is_archived || false,
         pronouns: pData.pronouns || 'Rather not say'
       })
+
+      // Fetch Phone Lines
+      const { data: phoneData, error: phoneErr } = await supabase
+        .from('person_phones')
+        .select('*')
+        .eq('person_id', personId)
+      if (phoneErr) console.error("Error fetching phone numbers:", phoneErr)
+      
+      if (phoneData && phoneData.length > 0) {
+        setPhones(phoneData)
+      } else if (pData.phone) {
+        setPhones([{ phone: pData.phone, label: 'Primary' }])
+      } else {
+        setPhones([])
+      }
 
       // Fetch Interactions
       const { data: iData, error: iError } = await supabase
@@ -157,7 +209,7 @@ export default function PersonProfilePage() {
         .eq('person_id', personId)
 
       if (tError) throw tError
-      
+
       const mappedTags = (tData || []).map((t: any) => t.tags).filter(Boolean) as TagData[]
       setTags(mappedTags)
 
@@ -168,9 +220,9 @@ export default function PersonProfilePage() {
           .from('people')
           .select('*')
           .eq('user_id', user.id)
-        
+
         console.log("DEBUG: allPeopleData", allPeopleData, "error:", peopleFetchErr)
-        
+
         // Filter out archived people explicitly in JS to handle NULL safely
         const activePeople = (allPeopleData || []).filter(p => p.is_archived !== true)
         console.log("DEBUG: activePeople", activePeople)
@@ -179,6 +231,14 @@ export default function PersonProfilePage() {
         // Fetch Connections
         const { data: connectionsData } = await supabase.from('connections').select('*').or(`person_a_id.eq.${personId},person_b_id.eq.${personId}`)
         setConnections(connectionsData || [])
+      }
+
+      // Save all resolved details to cache for offline-first support
+      if (typeof window !== "undefined") {
+        localStorage.setItem(`lifeos_person_${personId}_cache`, JSON.stringify(resolvedPerson))
+        localStorage.setItem(`lifeos_person_${personId}_phones_cache`, JSON.stringify(phoneData && phoneData.length > 0 ? phoneData : (resolvedPerson.phone ? [{ phone: resolvedPerson.phone, label: 'Primary' }] : [])))
+        localStorage.setItem(`lifeos_person_${personId}_interactions_cache`, JSON.stringify(iData || []))
+        localStorage.setItem(`lifeos_person_${personId}_tags_cache`, JSON.stringify(mappedTags))
       }
 
     } catch (error) {
@@ -191,7 +251,7 @@ export default function PersonProfilePage() {
   const logInteraction = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLogging(true)
-    
+
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
@@ -258,6 +318,8 @@ export default function PersonProfilePage() {
     e.preventDefault()
     setSavingEdit(true)
     try {
+      const primaryPhone = phones[0]?.phone || null;
+
       const { error } = await supabase
         .from('people')
         .update({
@@ -265,7 +327,7 @@ export default function PersonProfilePage() {
           relationship_type: editData.relationship_type,
           birthday: editData.birthday || null,
           photo: editData.photo || null,
-          phone: editData.phone || null,
+          phone: primaryPhone,
           email: editData.email || null,
           address: editData.address || null,
           strength_score: editData.strength_score,
@@ -276,11 +338,33 @@ export default function PersonProfilePage() {
         .eq('id', personId)
 
       if (error) throw error
-      
+
+      // Update person_phones: clear existing, insert updated lines
+      const { error: delErr } = await supabase
+        .from('person_phones')
+        .delete()
+        .eq('person_id', personId)
+      if (delErr) throw delErr
+
+      if (phones.length > 0) {
+        const phoneInserts = phones.filter(p => p.phone.trim() !== "").map(p => ({
+          person_id: personId,
+          phone: p.phone,
+          label: p.label || 'Mobile'
+        }))
+
+        if (phoneInserts.length > 0) {
+          const { error: insErr } = await supabase
+            .from('person_phones')
+            .insert(phoneInserts)
+          if (insErr) throw insErr
+        }
+      }
+
       if (typeof window !== "undefined") {
         localStorage.removeItem("lifeos_people_cache")
       }
-      setPerson(prev => prev ? { ...prev, ...editData } : null)
+      setPerson(prev => prev ? { ...prev, ...editData, phone: primaryPhone } : null)
       setIsEditing(false)
     } catch (error) {
       console.error("Error saving person:", error)
@@ -376,7 +460,7 @@ export default function PersonProfilePage() {
 
   const handleAddTag = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Enter' || !newTag.trim() || addingTag) return
-    
+
     setAddingTag(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -401,7 +485,7 @@ export default function PersonProfilePage() {
           .insert([{ user_id: user.id, name: tagName }])
           .select()
           .single()
-        
+
         if (createError) throw createError
         tagId = createdTag.id
         existingTag = createdTag
@@ -411,7 +495,7 @@ export default function PersonProfilePage() {
       const { error: linkError } = await supabase
         .from('person_tags')
         .insert([{ person_id: personId, tag_id: tagId }])
-      
+
       // Ignore conflict errors if they already have this tag
       if (linkError && linkError.code !== '23505') throw linkError
 
@@ -462,12 +546,12 @@ export default function PersonProfilePage() {
     const today = new Date()
     const bday = new Date(person.birthday)
     bday.setFullYear(today.getFullYear()) // Set birthday to this year
-    
+
     // If birthday already passed this year, look at next year
     if (bday < today) {
       bday.setFullYear(today.getFullYear() + 1)
     }
-    
+
     const diffTime = Math.abs(bday.getTime() - today.getTime())
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
     isBirthdaySoon = diffDays <= 14
@@ -502,8 +586,8 @@ export default function PersonProfilePage() {
                 </button>
               </div>
               <div className="flex items-center gap-3">
-                <Button 
-                  onClick={() => setIsAiModalOpen(true)} 
+                <Button
+                  onClick={() => setIsAiModalOpen(true)}
                   className={`gap-2 shrink-0 border-white/10 ${isBirthdaySoon ? 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 shadow-[0_0_15px_rgba(168,85,247,0.5)] animate-pulse' : 'bg-white/5 hover:bg-white/10 text-white'}`}
                   variant={isBirthdaySoon ? "default" : "outline"}
                 >
@@ -527,23 +611,25 @@ export default function PersonProfilePage() {
               {person.birthday && (
                 <>
                   <span className="text-gray-600">•</span>
-                  <span className="text-sm text-gray-400">Birthday: {new Date(person.birthday).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}</span>
+                  <span className="text-sm text-gray-400">Birthday: {new Date(person.birthday).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                 </>
               )}
-              {person.phone && (
-                <div className="flex items-center gap-1 group">
+              {phones.length > 0 && phones.map((p, idx) => (
+                <div key={p.id || idx} className="flex items-center gap-1 group">
                   <span className="text-gray-600">•</span>
-                  <span className="text-sm text-gray-400 group-hover:text-white transition-colors">{person.phone}</span>
+                  <span className="text-sm text-gray-400 group-hover:text-white transition-colors">
+                    {p.phone} <span className="text-[9px] text-gray-500 font-semibold uppercase bg-white/5 border border-white/5 px-1 py-0.5 rounded ml-1">{p.label}</span>
+                  </span>
                   <div className="hidden group-hover:flex items-center gap-1 ml-2">
-                    <a href={`tel:${person.phone.replace(/[^0-9+]/g, '')}`} className="p-1 hover:bg-white/10 rounded-full transition-colors text-green-400" title="Call">
+                    <a href={`tel:${p.phone.replace(/[^0-9+]/g, '')}`} className="p-1 hover:bg-white/10 rounded-full transition-colors text-green-400" title={`Call ${p.label}`}>
                       <Phone className="h-3 w-3" />
                     </a>
-                    <a href={`https://wa.me/${formatWhatsAppNumber(person.phone)}`} target="_blank" rel="noopener noreferrer" className="p-1 hover:bg-white/10 rounded-full transition-colors text-green-400" title="WhatsApp">
+                    <a href={`https://wa.me/${formatWhatsAppNumber(p.phone)}`} target="_blank" rel="noopener noreferrer" className="p-1 hover:bg-white/10 rounded-full transition-colors text-green-400" title={`WhatsApp ${p.label}`}>
                       <MessageCircle className="h-3 w-3" />
                     </a>
                   </div>
                 </div>
-              )}
+              ))}
               {person.email && (
                 <div className="flex items-center gap-1 group">
                   <span className="text-gray-600">•</span>
@@ -555,18 +641,18 @@ export default function PersonProfilePage() {
               )}
             </div>
             {person.address && (
-              <a 
-                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(person.address)}`} 
-                target="_blank" 
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(person.address)}`}
+                target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-blue-400 transition-colors mt-2 group"
               >
-                <MapPin className="h-3 w-3 text-blue-500" /> 
+                <MapPin className="h-3 w-3 text-blue-500" />
                 {person.address}
                 <span className="opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-white/10 px-1.5 rounded">Map</span>
               </a>
             )}
-            
+
             {/* Tagging System */}
             <div className="mt-4 flex items-center flex-wrap gap-2">
               {tags.map(tag => (
@@ -578,7 +664,7 @@ export default function PersonProfilePage() {
                 </div>
               ))}
               <div className="relative">
-                <input 
+                <input
                   type="text"
                   placeholder={addingTag ? "Adding..." : "+ Add detail (Likes, Hobbies)"}
                   value={newTag}
@@ -594,23 +680,23 @@ export default function PersonProfilePage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+
         {/* Left Column: Stats & Logging */}
         <div className="space-y-6">
           <div className="glass-panel p-6 rounded-xl">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold flex items-center gap-2">
-                  <Heart className="h-5 w-5 text-rose-500" /> Relationship Health
-                </h3>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => generateMagic('summary')} className="border-white/10 text-yellow-400 hover:text-yellow-300 hover:bg-yellow-400/10 h-8 text-xs px-2">
-                    <Sparkles className="mr-1.5 h-3 w-3" /> Summary
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => generateMagic('conflict')} className="border-white/10 text-red-400 hover:text-red-300 hover:bg-red-400/10 h-8 text-xs px-2">
-                    <ShieldAlert className="mr-1.5 h-3 w-3" /> Conflict
-                  </Button>
-                </div>
-              </div>   
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Heart className="h-5 w-5 text-rose-500" /> Relationship Health
+              </h3>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => generateMagic('summary')} className="border-white/10 text-yellow-400 hover:text-yellow-300 hover:bg-yellow-400/10 h-8 text-xs px-2">
+                  <Sparkles className="mr-1.5 h-3 w-3" /> Summary
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => generateMagic('conflict')} className="border-white/10 text-red-400 hover:text-red-300 hover:bg-red-400/10 h-8 text-xs px-2">
+                  <ShieldAlert className="mr-1.5 h-3 w-3" /> Conflict
+                </Button>
+              </div>
+            </div>
             <div className="space-y-4">
               <div>
                 <div className="flex justify-between text-sm mb-1">
@@ -621,7 +707,7 @@ export default function PersonProfilePage() {
                   <div className="bg-rose-500 h-2 rounded-full transition-all duration-500" style={{ width: `${person.strength_score}%` }}></div>
                 </div>
               </div>
-              
+
               <div>
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-gray-400">Trust</span>
@@ -652,7 +738,7 @@ export default function PersonProfilePage() {
                   )
                 })}
               </div>
-              
+
               <div className="flex gap-2">
                 {['positive', 'neutral', 'negative'].map((s) => (
                   <button
@@ -666,7 +752,7 @@ export default function PersonProfilePage() {
                 ))}
               </div>
 
-              <textarea 
+              <textarea
                 placeholder="What happened? (e.g. Had coffee, talked about their new job...)"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
@@ -683,7 +769,7 @@ export default function PersonProfilePage() {
           {/* Connections / Graph Links */}
           <div className="glass-panel p-6 rounded-xl">
             <h3 className="font-semibold mb-4 flex items-center gap-2"><Network className="h-4 w-4 text-primary" /> Connected To</h3>
-            
+
             <div className="space-y-3 mb-4">
               {connections.length === 0 && <p className="text-sm text-gray-400">No connections added yet.</p>}
               {connections.map(c => {
@@ -691,12 +777,12 @@ export default function PersonProfilePage() {
                 const otherPersonId = isPersonA ? c.person_b_id : c.person_a_id
                 const otherPerson = allPeople.find(p => p.id === otherPersonId)
                 if (!otherPerson) return null
-                
+
                 return (
                   <Link href={`/dashboard/person/${otherPerson.id}`} key={c.id} className="flex items-center justify-between bg-white/5 p-2 rounded-lg border border-white/5 hover:bg-white/10 transition-colors">
                     <div className="flex items-center gap-2">
                       <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden">
-                         {otherPerson.photo ? <img src={otherPerson.photo} className="w-full h-full object-cover" /> : <span className="text-[10px] text-primary font-bold">{otherPerson.name.charAt(0)}</span>}
+                        {otherPerson.photo ? <img src={otherPerson.photo} className="w-full h-full object-cover" /> : <span className="text-[10px] text-primary font-bold">{otherPerson.name.charAt(0)}</span>}
                       </div>
                       <span className="text-sm font-medium">{otherPerson.name}</span>
                     </div>
@@ -718,7 +804,7 @@ export default function PersonProfilePage() {
                   person_b_id: newConnectionId,
                   connection_type: newConnectionType
                 }]).select().single()
-                
+
                 if (error) {
                   alert("Connection might already exist!")
                 } else {
@@ -738,7 +824,7 @@ export default function PersonProfilePage() {
                 </div>
               ) : (
                 <>
-                  <select 
+                  <select
                     value={newConnectionId}
                     onChange={e => setNewConnectionId(e.target.value)}
                     required
@@ -769,10 +855,10 @@ export default function PersonProfilePage() {
         <div className="lg:col-span-2 space-y-6">
           <div className="glass-panel p-6 rounded-xl min-h-[500px]">
             <h3 className="font-semibold mb-6 text-xl">Interaction Timeline</h3>
-            
+
             {person.is_archived && (
               <div className="mb-6 flex items-center gap-2 px-4 py-3 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20">
-                <ShieldAlert className="h-5 w-5" /> 
+                <ShieldAlert className="h-5 w-5" />
                 <span className="text-sm font-medium">This relationship is archived.</span>
               </div>
             )}
@@ -788,7 +874,7 @@ export default function PersonProfilePage() {
                 {interactions.map((interaction, idx) => {
                   const Icon = TYPE_ICONS[interaction.type] || MessageCircle
                   const colorClass = SENTIMENT_COLORS[interaction.sentiment] || "text-gray-400 bg-white/10"
-                  
+
                   return (
                     <div key={interaction.id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
                       <div className="flex items-center justify-center w-10 h-10 rounded-full border border-black bg-zinc-900 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 relative z-10">
@@ -839,14 +925,14 @@ export default function PersonProfilePage() {
                     <X className="h-5 w-5" />
                   </button>
                 </div>
-                
+
                 <form onSubmit={saveEdit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
                   <div className="space-y-2">
                     <label className="text-sm text-gray-400">Name</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={editData.name}
-                      onChange={e => setEditData({...editData, name: e.target.value})}
+                      onChange={e => setEditData({ ...editData, name: e.target.value })}
                       required
                       className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
                     />
@@ -854,19 +940,19 @@ export default function PersonProfilePage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="text-sm text-gray-400">Relationship Type</label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         placeholder="e.g. Friend"
                         value={editData.relationship_type}
-                        onChange={e => setEditData({...editData, relationship_type: e.target.value})}
+                        onChange={e => setEditData({ ...editData, relationship_type: e.target.value })}
                         className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
                       />
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm text-gray-400">Pronouns</label>
-                      <select 
+                      <select
                         value={editData.pronouns}
-                        onChange={e => setEditData({...editData, pronouns: e.target.value})}
+                        onChange={e => setEditData({ ...editData, pronouns: e.target.value })}
                         className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors [&>option]:bg-zinc-900"
                       >
                         <option value="He/Him">He/Him</option>
@@ -879,40 +965,84 @@ export default function PersonProfilePage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="text-sm text-gray-400">Birthday</label>
-                      <input 
-                        type="date" 
+                      <input
+                        type="date"
                         value={editData.birthday}
-                        onChange={e => setEditData({...editData, birthday: e.target.value})}
+                        onChange={e => setEditData({ ...editData, birthday: e.target.value })}
                         className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-sm text-gray-400">Phone</label>
-                      <input 
-                        type="tel" 
-                        value={editData.phone}
-                        onChange={e => setEditData({...editData, phone: e.target.value})}
-                        className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
-                      />
+
+                  <div className="space-y-4">
+                    <div className="space-y-2 border border-white/5 p-3 rounded-lg bg-black/20">
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Phone Lines</label>
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-6 text-xs text-purple-400 hover:text-purple-300"
+                          onClick={() => setPhones([...phones, { phone: '', label: 'Mobile' }])}
+                        >
+                          + Add Line
+                        </Button>
+                      </div>
+                      
+                      {phones.map((p, idx) => (
+                        <div key={idx} className="flex gap-2 items-center mt-2">
+                          <select
+                            value={p.label}
+                            onChange={(e) => {
+                              const newP = [...phones];
+                              newP[idx].label = e.target.value;
+                              setPhones(newP);
+                            }}
+                            className="bg-black border border-white/10 rounded-lg p-1.5 text-xs text-white focus:outline-none w-24 [&>option]:bg-zinc-950"
+                          >
+                            <option value="Mobile">Mobile</option>
+                            <option value="Home">Home</option>
+                            <option value="Work">Work</option>
+                            <option value="Primary">Primary</option>
+                            <option value="Secondary">Secondary</option>
+                          </select>
+                          <input
+                            type="tel"
+                            placeholder="Phone number"
+                            value={p.phone}
+                            onChange={(e) => {
+                              const newP = [...phones];
+                              newP[idx].phone = e.target.value;
+                              setPhones(newP);
+                            }}
+                            className="flex-1 bg-black border border-white/10 rounded-lg p-1.5 text-xs text-white focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setPhones(phones.filter((_, i) => i !== idx))}
+                            className="p-1 text-gray-500 hover:text-rose-400 hover:bg-white/5 rounded-full transition-colors"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm text-gray-400">Email</label>
-                      <input 
-                        type="email" 
+                      <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Email</label>
+                      <input
+                        type="email"
                         value={editData.email}
-                        onChange={e => setEditData({...editData, email: e.target.value})}
+                        onChange={e => setEditData({ ...editData, email: e.target.value })}
                         className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
                       />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm text-gray-400">Address</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={editData.address}
-                      onChange={e => setEditData({...editData, address: e.target.value})}
+                      onChange={e => setEditData({ ...editData, address: e.target.value })}
                       className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
                     />
                   </div>
@@ -922,11 +1052,11 @@ export default function PersonProfilePage() {
                         <span>Strength Score</span>
                         <span className="text-primary">{editData.strength_score}%</span>
                       </label>
-                      <input 
-                        type="range" 
+                      <input
+                        type="range"
                         min="0" max="100"
                         value={editData.strength_score}
-                        onChange={e => setEditData({...editData, strength_score: parseInt(e.target.value) || 0})}
+                        onChange={e => setEditData({ ...editData, strength_score: parseInt(e.target.value) || 0 })}
                         className="w-full accent-primary"
                       />
                     </div>
@@ -935,16 +1065,16 @@ export default function PersonProfilePage() {
                         <span>Trust Score</span>
                         <span className="text-emerald-400">{editData.trust_score}%</span>
                       </label>
-                      <input 
-                        type="range" 
+                      <input
+                        type="range"
                         min="0" max="100"
                         value={editData.trust_score}
-                        onChange={e => setEditData({...editData, trust_score: parseInt(e.target.value) || 0})}
+                        onChange={e => setEditData({ ...editData, trust_score: parseInt(e.target.value) || 0 })}
                         className="w-full accent-emerald-500"
                       />
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <label className="text-sm text-gray-400">Photo</label>
                     <div className="flex items-center gap-3">
@@ -952,10 +1082,10 @@ export default function PersonProfilePage() {
                       <div className="flex-1">
                         <label className="flex items-center justify-center w-full p-2 border border-dashed border-white/20 rounded-lg cursor-pointer hover:bg-white/5 transition-colors text-sm text-gray-300">
                           {uploadingImage ? "Uploading..." : "Upload Photo"}
-                          <input 
-                            type="file" 
+                          <input
+                            type="file"
                             accept="image/*"
-                            className="hidden" 
+                            className="hidden"
                             onChange={handleImageUpload}
                             disabled={uploadingImage}
                           />
@@ -997,12 +1127,12 @@ export default function PersonProfilePage() {
                     <X className="h-5 w-5" />
                   </button>
                 </div>
-                
+
                 <form onSubmit={saveReminder} className="p-6 space-y-4">
                   <div className="space-y-2">
                     <label className="text-sm text-gray-400">What to do?</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={reminderTitle}
                       onChange={e => setReminderTitle(e.target.value)}
                       placeholder={`e.g. Call ${person.name}`}
@@ -1012,8 +1142,8 @@ export default function PersonProfilePage() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm text-gray-400">When?</label>
-                    <input 
-                      type="datetime-local" 
+                    <input
+                      type="datetime-local"
                       value={reminderDate}
                       onChange={e => setReminderDate(e.target.value)}
                       required
@@ -1057,7 +1187,7 @@ export default function PersonProfilePage() {
                     <X className="h-5 w-5" />
                   </button>
                 </div>
-                
+
                 <div className="p-6 overflow-y-auto custom-scrollbar flex-1 flex flex-col">
                   {isBirthdaySoon && (
                     <div className="mb-6 p-4 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-200 text-sm">

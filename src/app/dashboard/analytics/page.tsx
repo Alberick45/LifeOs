@@ -31,6 +31,20 @@ export default function AnalyticsPage() {
   const [interactions, setInteractions] = useState<Interaction[]>([])
 
   useEffect(() => {
+    // Load from cache first for instant layout
+    if (typeof window !== "undefined") {
+      const cachedPeople = localStorage.getItem("lifeos_analytics_people")
+      const cachedInts = localStorage.getItem("lifeos_analytics_interactions")
+      if (cachedPeople && cachedInts) {
+        try {
+          setPeople(JSON.parse(cachedPeople))
+          setInteractions(JSON.parse(cachedInts))
+          setLoading(false)
+        } catch (e) {
+          console.error("Failed to parse cached analytics:", e)
+        }
+      }
+    }
     fetchData()
   }, [])
 
@@ -48,8 +62,16 @@ export default function AnalyticsPage() {
       if (peopleRes.error) throw peopleRes.error;
       if (interactionsRes.error) throw interactionsRes.error;
 
-      if (peopleRes.data) setPeople(peopleRes.data)
-      if (interactionsRes.data) setInteractions(interactionsRes.data)
+      const freshPeople = peopleRes.data || []
+      const freshInts = interactionsRes.data || []
+
+      setPeople(freshPeople)
+      setInteractions(freshInts)
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem("lifeos_analytics_people", JSON.stringify(freshPeople))
+        localStorage.setItem("lifeos_analytics_interactions", JSON.stringify(freshInts))
+      }
       
     } catch (error: any) {
       console.error("Error fetching analytics data", error)
