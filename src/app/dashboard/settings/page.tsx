@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
-import { User, Loader2, Upload, Camera } from "lucide-react"
+import { User, Loader2, Upload, Camera, HardDrive, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 export default function SettingsPage() {
@@ -24,6 +24,10 @@ export default function SettingsPage() {
   const [phone, setPhone] = useState("")
   
   const [uploadingImage, setUploadingImage] = useState(false)
+
+  // Storage Progress State
+  const [storageEstimate, setStorageEstimate] = useState<{ used: number; total: number; percent: number }>({ used: 0, total: 0, percent: 0 })
+  const [cacheMetrics, setCacheMetrics] = useState({ people: 0, analytics: 0, graph: false })
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -56,6 +60,63 @@ export default function SettingsPage() {
       })
     }
   }, [router])
+
+  useEffect(() => {
+    // 1. Storage Quota Estimation
+    if (typeof window !== "undefined" && navigator.storage && navigator.storage.estimate) {
+      navigator.storage.estimate().then(estimate => {
+        const used = estimate.usage || 0
+        const total = estimate.quota || 0
+        const percent = total > 0 ? (used / total) * 100 : 0
+        setStorageEstimate({ used, total, percent })
+      }).catch(err => {
+        console.error("Storage estimate error:", err)
+      })
+    }
+
+    // 2. Fetch cache counts
+    if (typeof window !== "undefined") {
+      const cachedPeople = localStorage.getItem("lifeos_people_cache")
+      const cachedAnalytics = localStorage.getItem("lifeos_analytics_people")
+      const cachedGraph = localStorage.getItem("lifeos_graph_cache")
+
+      let peopleCount = 0
+      try {
+        if (cachedPeople) peopleCount = JSON.parse(cachedPeople).length
+      } catch (e) {}
+
+      let analyticsCount = 0
+      try {
+        if (cachedAnalytics) analyticsCount = JSON.parse(cachedAnalytics).length
+      } catch (e) {}
+
+      setCacheMetrics({
+        people: peopleCount,
+        analytics: analyticsCount,
+        graph: !!cachedGraph
+      })
+    }
+  }, [])
+
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  const handleClearCache = () => {
+    if (confirm("Are you sure you want to clear your local offline cache? Your data on Supabase will not be affected, but offline performance will be temporarily reduced until you reload.")) {
+      localStorage.removeItem("lifeos_people_cache")
+      localStorage.removeItem("lifeos_analytics_people")
+      localStorage.removeItem("lifeos_analytics_interactions")
+      localStorage.removeItem("lifeos_graph_cache")
+      localStorage.removeItem("lifeos_analytics_last_fetch")
+      alert("Local cache cleared successfully!")
+      window.location.reload()
+    }
+  }
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0 || !user) return
@@ -394,6 +455,64 @@ export default function SettingsPage() {
                   ? 'Your device is successfully registered for native push notifications! Click "Test Push Notification" to verify.' 
                   : 'Use the floating setup prompt at the bottom of the dashboard to enable native push notifications, then test here.'}
               </p>
+            </div>
+
+            {/* Offline Storage Meter Section */}
+            <div className="mt-8 pt-6 border-t border-white/5 space-y-4">
+              <div className="flex items-center gap-2">
+                <HardDrive className="h-5 w-5 text-primary" />
+                <h3 className="text-lg font-medium text-white">Offline Storage & Caching</h3>
+              </div>
+              <p className="text-xs text-gray-500">
+                HumanOS uses browser storage to cache profiles, relationship graphs, and analytics for instantaneous offline access.
+              </p>
+
+              <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-4">
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs font-semibold text-gray-300">
+                    <span>Cache Storage Usage</span>
+                    <span>{formatBytes(storageEstimate.used)} / {formatBytes(storageEstimate.total || 262144000)}</span>
+                  </div>
+                  {/* Progress Bar Container */}
+                  <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full transition-all duration-500" 
+                      style={{ width: `${Math.max(1, Math.min(100, storageEstimate.percent))}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[10px] text-gray-500">
+                    <span>{storageEstimate.percent.toFixed(5)}% used</span>
+                    <span>Offline-Ready status: Active</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div className="p-2 rounded bg-black/30 border border-white/5">
+                    <span className="block text-[10px] text-gray-500">Cached People</span>
+                    <span className="font-semibold text-white">{cacheMetrics.people}</span>
+                  </div>
+                  <div className="p-2 rounded bg-black/30 border border-white/5">
+                    <span className="block text-[10px] text-gray-500">Cached Analytics</span>
+                    <span className="font-semibold text-white">{cacheMetrics.analytics}</span>
+                  </div>
+                  <div className="p-2 rounded bg-black/30 border border-white/5">
+                    <span className="block text-[10px] text-gray-500">Cached Graph</span>
+                    <span className="font-semibold text-green-400">{cacheMetrics.graph ? 'Synced' : 'No Cache'}</span>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <Button 
+                    onClick={handleClearCache}
+                    variant="destructive"
+                    size="sm"
+                    className="flex items-center gap-1.5 bg-red-950/40 text-red-400 hover:bg-red-900 border border-red-500/30"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Clear Cache & Force Re-sync
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

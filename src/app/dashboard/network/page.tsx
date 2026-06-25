@@ -22,7 +22,7 @@ const getRelationshipColor = (relType: string) => {
     return "#d946ef"; // fuchsia for close friends
   }
 
-  const familyKeywords = ["family", "mom", "mum", "mummy", "mama", "mother", "father", "dad", "daddy", "brother", "sister", "sibling", "cousin", "aunt", "uncle", "grandmother", "grandfather", "grandparent", "parent", "son", "daughter", "child", "mother-in-law", "father-in-law"];
+  const familyKeywords = ["family", "mom", "mum", "mummy", "mama", "mother", "father", "dad", "daddy", "brother", "sister", "sibling", "cousin", "aunt", "aunty", "auntie", "uncle", "grandmother", "grandfather", "grandparent", "parent", "son", "daughter", "child", "mother-in-law", "father-in-law"];
   if (familyKeywords.some(keyword => lower.includes(keyword)) || lower === "family") {
     return "#f43f5e"; // rose for family
   }

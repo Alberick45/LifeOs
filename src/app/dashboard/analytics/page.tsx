@@ -81,13 +81,74 @@ export default function AnalyticsPage() {
     }
   }
 
+const normalizeRelationshipType = (relType: string): string => {
+  if (!relType) return "Other";
+  const trimmed = relType.trim();
+  if (!trimmed) return "Other";
+  const lower = trimmed.toLowerCase();
+
+  // 1. Group Mother-like terms
+  const motherTerms = ["mum", "mummy", "mom", "mama", "mother"];
+  if (motherTerms.includes(lower)) {
+    return "Mum/Mother";
+  }
+
+  // 2. Group Father-like terms
+  const fatherTerms = ["dad", "daddy", "papa", "father"];
+  if (fatherTerms.includes(lower)) {
+    return "Dad/Father";
+  }
+
+  // 3. Group Aunt terms
+  const auntTerms = ["aunt", "aunty", "auntie"];
+  if (auntTerms.includes(lower)) {
+    return "Aunt";
+  }
+
+  // 4. Group Uncle terms
+  const uncleTerms = ["uncle", "unkle"];
+  if (uncleTerms.includes(lower)) {
+    return "Uncle";
+  }
+
+  // 5. Group Close Friend terms
+  const closeFriendTerms = ["close friend", "close friends", "best friend", "best friends", "bff"];
+  if (closeFriendTerms.includes(lower) || lower.includes("close friend") || lower.includes("best friend")) {
+    return "Close Friend";
+  }
+
+  // 6. Group generic Friend terms
+  const friendTerms = ["friend", "friends", "buddy", "pal", "mate"];
+  if (friendTerms.includes(lower) || lower.endsWith("friend") || lower.endsWith("friends")) {
+    return "Friend";
+  }
+
+  // 7. Group family-member general
+  const familyGeneral = ["family", "family member", "relative"];
+  if (familyGeneral.includes(lower)) {
+    return "Family";
+  }
+
+  // 8. Sibling terms
+  const siblingTerms = ["brother", "sister", "sibling", "siblings"];
+  if (siblingTerms.includes(lower)) {
+    return "Sibling";
+  }
+
+  // Casing normalization: convert standard to Title Case
+  return trimmed.split(/\s+/).map(word => {
+    if (!word) return "";
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  }).join(" ");
+};
+
   // Derived Data for Charts
   const avgStrength = people.length > 0 ? Math.round(people.reduce((sum, p) => sum + p.strength_score, 0) / people.length) : 0;
   const avgTrust = people.length > 0 ? Math.round(people.reduce((sum, p) => sum + p.trust_score, 0) / people.length) : 0;
 
   // 1. Relationship Distribution
   const typeCount = people.reduce((acc, curr) => {
-    const t = curr.relationship_type || "Other";
+    const t = normalizeRelationshipType(curr.relationship_type);
     acc[t] = (acc[t] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
@@ -95,7 +156,7 @@ export default function AnalyticsPage() {
 
   // 2. Average Health by Type
   const healthByType = Object.keys(typeCount).map(type => {
-    const matches = people.filter(p => (p.relationship_type || "Other") === type);
+    const matches = people.filter(p => normalizeRelationshipType(p.relationship_type) === type);
     return {
       name: type,
       Strength: Math.round(matches.reduce((s, p) => s + p.strength_score, 0) / matches.length),

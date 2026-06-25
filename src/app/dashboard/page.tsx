@@ -29,8 +29,8 @@ const parseRelationshipFromName = (name: string): string => {
   const lower = name.toLowerCase();
   
   const familyKeywords = [
-    "aunt", "auntie", "uncle", "brother", "sister", "cousin", 
-    "mom", "dad", "mother", "father", "son", "daughter",
+    "aunt", "auntie", "aunty", "uncle", "brother", "sister", "cousin", 
+    "mom", "mum", "mummy", "mama", "dad", "daddy", "papa", "mother", "father", "son", "daughter",
     "grandma", "grandpa", "grandmother", "grandfather", "nephew", "niece"
   ];
   if (familyKeywords.some(kw => lower.includes(kw))) {

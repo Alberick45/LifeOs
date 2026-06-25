@@ -71,11 +71,41 @@ export default function PersonProfilePage() {
 
   // Edit State
   const [isEditing, setIsEditing] = useState(false)
+  const [editScoresManuallySet, setEditScoresManuallySet] = useState(false)
   const [editData, setEditData] = useState<{ name: string, relationship_type: string, birthday: string, photo: string, phone: string, email: string, address: string, strength_score: number, trust_score: number, is_archived: boolean, pronouns: string }>({
     name: '', relationship_type: '', birthday: '', photo: '', phone: '', email: '', address: '', strength_score: 50, trust_score: 50, is_archived: false, pronouns: 'Rather not say'
   })
   const [savingEdit, setSavingEdit] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
+
+  const handleEditRelationshipTypeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const type = e.target.value;
+    if (!editScoresManuallySet) {
+      const lowerType = type.toLowerCase().trim();
+      let defaultScore = editData.strength_score; // fallback to current
+      
+      if (!lowerType) {
+        // do nothing
+      } else if (lowerType.includes("close friend") || lowerType.includes("best friend")) {
+        defaultScore = 70;
+      } else if (lowerType.includes("family") || lowerType.includes("parent") || lowerType.includes("sibling") || lowerType.includes("brother") || lowerType.includes("sister") || lowerType.includes("mom") || lowerType.includes("dad")) {
+        defaultScore = 85;
+      } else if (lowerType === "friend" || lowerType.includes("just friend") || lowerType === "friends") {
+        defaultScore = 40;
+      } else {
+        defaultScore = 20;
+      }
+
+      setEditData(prev => ({
+        ...prev,
+        relationship_type: type,
+        strength_score: defaultScore,
+        trust_score: defaultScore
+      }));
+    } else {
+      setEditData(prev => ({ ...prev, relationship_type: type }));
+    }
+  }
 
   // Reminder State
   const [isCreatingReminder, setIsCreatingReminder] = useState(false)
@@ -944,7 +974,7 @@ export default function PersonProfilePage() {
                         type="text"
                         placeholder="e.g. Friend"
                         value={editData.relationship_type}
-                        onChange={e => setEditData({ ...editData, relationship_type: e.target.value })}
+                        onChange={handleEditRelationshipTypeChange}
                         className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
                       />
                     </div>
@@ -1056,7 +1086,10 @@ export default function PersonProfilePage() {
                         type="range"
                         min="0" max="100"
                         value={editData.strength_score}
-                        onChange={e => setEditData({ ...editData, strength_score: parseInt(e.target.value) || 0 })}
+                        onChange={e => {
+                          setEditScoresManuallySet(true);
+                          setEditData({ ...editData, strength_score: parseInt(e.target.value) || 0 })
+                        }}
                         className="w-full accent-primary"
                       />
                     </div>
@@ -1069,7 +1102,10 @@ export default function PersonProfilePage() {
                         type="range"
                         min="0" max="100"
                         value={editData.trust_score}
-                        onChange={e => setEditData({ ...editData, trust_score: parseInt(e.target.value) || 0 })}
+                        onChange={e => {
+                          setEditScoresManuallySet(true);
+                          setEditData({ ...editData, trust_score: parseInt(e.target.value) || 0 })
+                        }}
                         className="w-full accent-emerald-500"
                       />
                     </div>

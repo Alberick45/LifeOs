@@ -13,6 +13,7 @@ import Link from "next/link"
 export default function AddPersonPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [scoresManuallySet, setScoresManuallySet] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
     relationship_type: "",
@@ -21,6 +22,46 @@ export default function AddPersonPage() {
     strength_score: 0,
     trust_score: 0,
   })
+
+  const handleRelationshipTypeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const type = e.target.value;
+    
+    if (!scoresManuallySet) {
+      const lowerType = type.toLowerCase().trim();
+      let defaultScore = 0;
+      
+      if (!lowerType) {
+        defaultScore = 0;
+      } else if (lowerType.includes("close friend") || lowerType.includes("best friend")) {
+        defaultScore = 70;
+      } else if (lowerType.includes("family") || lowerType.includes("parent") || lowerType.includes("sibling") || lowerType.includes("brother") || lowerType.includes("sister") || lowerType.includes("mom") || lowerType.includes("dad")) {
+        defaultScore = 85;
+      } else if (lowerType === "friend" || lowerType.includes("just friend") || lowerType === "friends") {
+        defaultScore = 40;
+      } else {
+        defaultScore = 20; // colleague or anything else
+      }
+
+      setFormData(prev => ({
+        ...prev,
+        relationship_type: type,
+        strength_score: defaultScore,
+        trust_score: defaultScore,
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, relationship_type: type }));
+    }
+  }
+
+  const handleStrengthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setScoresManuallySet(true);
+    setFormData(prev => ({ ...prev, strength_score: parseInt(e.target.value) || 0 }));
+  }
+
+  const handleTrustChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setScoresManuallySet(true);
+    setFormData(prev => ({ ...prev, trust_score: parseInt(e.target.value) || 0 }));
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -91,7 +132,7 @@ export default function AddPersonPage() {
                     <Input
                       placeholder="Family, Friend, Colleague..."
                       value={formData.relationship_type}
-                      onChange={(e) => setFormData({ ...formData, relationship_type: e.target.value })}
+                      onChange={handleRelationshipTypeChange}
                     />
                   </div>
                   <div className="space-y-2">
@@ -128,7 +169,7 @@ export default function AddPersonPage() {
                       min="0" max="100"
                       className="w-full accent-primary"
                       value={formData.strength_score}
-                      onChange={(e) => setFormData({ ...formData, strength_score: parseInt(e.target.value) })}
+                      onChange={handleStrengthChange}
                     />
                   </div>
 
@@ -142,7 +183,7 @@ export default function AddPersonPage() {
                       min="0" max="100"
                       className="w-full accent-emerald-500"
                       value={formData.trust_score}
-                      onChange={(e) => setFormData({ ...formData, trust_score: parseInt(e.target.value) })}
+                      onChange={handleTrustChange}
                     />
                   </div>
                 </div>

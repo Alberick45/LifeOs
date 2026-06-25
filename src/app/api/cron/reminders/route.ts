@@ -31,18 +31,22 @@ export async function GET(request: Request) {
     for (const person of people || []) {
       if (!person.birthday) continue;
 
-      const bday = new Date(person.birthday);
-      // Create a date for the birthday this year
-      const nextBday = new Date(today.getFullYear(), bday.getMonth(), bday.getDate());
+      const dateParts = person.birthday.split('-');
+      if (dateParts.length !== 3) continue;
+      const bdayMonth = parseInt(dateParts[1], 10) - 1;
+      const bdayDay = parseInt(dateParts[2], 10);
+
+      const localTodayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const localNextBday = new Date(today.getFullYear(), bdayMonth, bdayDay);
 
       // If the birthday has passed this year, look at next year
-      if (nextBday < new Date(today.getFullYear(), today.getMonth(), today.getDate())) {
-        nextBday.setFullYear(today.getFullYear() + 1);
+      if (localNextBday < localTodayMidnight) {
+        localNextBday.setFullYear(today.getFullYear() + 1);
       }
 
       // Calculate diff in days (ignoring time)
-      const diffTime = nextBday.getTime() - today.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const diffTime = localNextBday.getTime() - localTodayMidnight.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
       // 3. Generate alerts for 7, 3, and 1 days out, plus day-of
       let alertMessage = null;
@@ -80,11 +84,17 @@ export async function GET(request: Request) {
     for (const reminder of customReminders || []) {
       if (!reminder.scheduled_for) continue;
 
-      const scheduledDate = new Date(reminder.scheduled_for);
+      const scheduledParts = reminder.scheduled_for.split('-');
+      if (scheduledParts.length !== 3) continue;
+      const schedYear = parseInt(scheduledParts[0], 10);
+      const schedMonth = parseInt(scheduledParts[1], 10) - 1;
+      const schedDay = parseInt(scheduledParts[2], 10);
+
+      const localTodayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const localScheduledDate = new Date(schedYear, schedMonth, schedDay);
       
-      // Calculate diff in days (ignoring time)
-      const diffTime = scheduledDate.getTime() - today.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const diffTime = localScheduledDate.getTime() - localTodayMidnight.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
       let alertMessage = null;
       let alertTitle = "Upcoming Reminder";
@@ -129,18 +139,30 @@ export async function GET(request: Request) {
 
       // Group latest interactions by person_id
       const lastIntMap = new Map<string, Date>();
+      const localTodayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
       if (lastInteractions) {
         lastInteractions.forEach(i => {
           if (i.person_id && i.interaction_date && !lastIntMap.has(i.person_id)) {
-            lastIntMap.set(i.person_id, new Date(i.interaction_date));
+            const pParts = i.interaction_date.split('-');
+            if (pParts.length === 3) {
+              lastIntMap.set(i.person_id, new Date(parseInt(pParts[0], 10), parseInt(pParts[1], 10) - 1, parseInt(pParts[2], 10)));
+            }
           }
         });
       }
 
       // Check decay threshold for each active person
       for (const person of allActivePeople) {
-        const lastDate = lastIntMap.get(person.id) || new Date(person.created_at || today);
-        const diffTime = today.getTime() - lastDate.getTime();
+        let lastDate = lastIntMap.get(person.id);
+        if (!lastDate) {
+          if (person.created_at) {
+            const cParts = person.created_at.split('T')[0].split('-');
+            lastDate = new Date(parseInt(cParts[0], 10), parseInt(cParts[1], 10) - 1, parseInt(cParts[2], 10));
+          } else {
+            lastDate = localTodayMidnight;
+          }
+        }
+        const diffTime = localTodayMidnight.getTime() - lastDate.getTime();
         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
         let decayThreshold = 14; // default for Friends
